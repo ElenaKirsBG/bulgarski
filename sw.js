@@ -1,9 +1,24 @@
-/* Офлайн-кэш. При обновлении index.html увеличьте номер версии. */
-const CACHE = 'bg-course-v3';
-const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).catch(() => {}).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
+/* Офлайн-режим: приложение целиком хранится на устройстве.
+   При обновлении файлов на GitHub увеличьте номер версии ниже. */
+const CACHE = 'bg-course-v5';
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x)))).then(() => self.clients.claim()));
+});
+/* Сначала из памяти устройства (мгновенно и без интернета), параллельно — тихое обновление из сети. */
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(fetch(e.request).then(r => { const c = r.clone(); caches.open(CACHE).then(ca => ca.put(e.request, c)); return r; }).catch(() => caches.match(e.request, { ignoreSearch: true })));
+  const req = e.request;
+  if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
+  const isPage = req.mode === 'navigate';
+  e.respondWith(caches.open(CACHE).then(async cache => {
+    const cached = await cache.match(isPage ? './index.html' : req, { ignoreSearch: true });
+    const net = fetch(req).then(r => { if (r && r.ok) cache.put(isPage ? './index.html' : req, r.clone()); return r; }).catch(() => null);
+    if (cached) { e.waitUntil(net); return cached; }
+    const r = await net;
+    return r || (isPage ? cache.match('./index.html') : new Response('', { status: 504 }));
+  }));
 });
