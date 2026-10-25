@@ -180,6 +180,15 @@ select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background
 .pgwrap img{display:block;max-width:none;height:auto}
 :root[data-theme="dark"] .pgwrap img{filter:invert(.9)}
 @media (prefers-color-scheme:dark){:root[data-theme="auto"] .pgwrap img{filter:invert(.9)}}
+.vpick{display:flex;flex-wrap:wrap;gap:3px;margin:6px 0 4px;font-size:1.3em}
+.vpick .vb{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;min-width:34px;padding:4px 6px;font-size:1em;cursor:pointer}
+.vpick .vb.on{background:var(--red-soft);color:var(--st);border-color:var(--st);font-weight:700}
+.vpick .vc{padding:5px 2px;color:var(--muted)}
+.addm{position:relative;padding:8px 36px 8px 10px;border-left:3px solid var(--gold);background:var(--accent-soft);border-radius:8px;margin:6px 0}
+.addm .chip{position:absolute;right:6px;top:6px;padding:2px 7px}
+.srcb{font-size:.7em;color:var(--gold);border:1px solid var(--gold);border-radius:6px;padding:0 4px;margin-left:6px}
+.mf{color:var(--muted);line-height:1.45}
+.vtabs{margin:12px 0 4px}
 </style>
 </head>
 <body>
@@ -7486,7 +7495,7 @@ function adjForms(e) {
 /* индекс всех словоформ -> статьи (для поиска по любой форме и для нажатия на слово) */
 const FORMS = new Map();
 function addForm(f, e) { if (!f) return; const k = norm(f); if (!k) return; if (!FORMS.has(k)) FORMS.set(k, new Set()); FORMS.get(k).add(e.id); }
-DICT.forEach(e => {
+function indexEntry(e) {
   addForm(e.bg, e);
   try {
     if (e.pos === 'гл') { const v = verbForms(e); e._v = v;
@@ -7498,11 +7507,12 @@ DICT.forEach(e => {
     if (e.g['фч']) e.g['фч'].split(',').forEach(x => addForm(x.trim(), e));
     if (e.g['ф'] && !['пр', 'числ', 'мест'].includes(e.pos)) e.g['ф'].split(',').forEach(x => addForm(x.trim(), e));
   } catch (err) { console.warn('forms', e.bg, err); }
-});
+}
+DICT.forEach(indexEntry);
 function lookup(word) {
   let s = FORMS.get(norm(word));
   if (!s && /-/.test(word)) { const parts = norm(word).split('-').filter(Boolean); for (let i = parts.length - 1; i >= 0 && !s; i--) s = FORMS.get(parts[i]) || FORMS.get(parts[i] + '-'); }
-  return s ? [...s].map(i => DICT[i]) : [];
+  return s ? [...s].map(i => DICT[i]).filter(e => !e.del) : [];
 }
 
 /* ================= КУРС: разбор DSL ================= */
@@ -7647,7 +7657,7 @@ function renderCourse() {
   const done = LESSONS.filter(l => progress[l.id] && progress[l.id].done).length;
   const pct = LESSONS.length ? Math.round(done / LESSONS.length * 100) : 0;
   const next = LESSONS.find(l => !(progress[l.id] && progress[l.id].done)) || LESSONS[0];
-  let h = '<div class="card"><div class="row" style="justify-content:space-between"><div><div style="font-weight:650">Ваш прогресс</div><div class="muted small">' + done + ' из ' + LESSONS.length + ' уроков · ' + DICT.length + ' слов в словаре</div></div><div class="big" style="color:var(--accent)">' + pct + '%</div></div><div class="progress"><i style="width:' + pct + '%"></i></div>' +
+  let h = '<div class="card"><div class="row" style="justify-content:space-between"><div><div style="font-weight:650">Ваш прогресс</div><div class="muted small">' + done + ' из ' + LESSONS.length + ' уроков · ' + live().length + ' слов в словаре</div></div><div class="big" style="color:var(--accent)">' + pct + '%</div></div><div class="progress"><i style="width:' + pct + '%"></i></div>' +
     (next ? '<div style="margin-top:12px"><button class="btn" data-go="#/lesson/' + next.id + '">' + (done ? 'Продолжить: ' : 'Начать: ') + 'урок ' + esc(next.num) + '</button></div>' : '') + '</div>';
   let part = null;
   LESSONS.forEach(l => {
@@ -7751,17 +7761,17 @@ function fillDict(q) {
   let res;
   if (nq) {
     const exact = new Set(); lookup(q).forEach(e => exact.add(e.id));
-    res = DICT.filter(e => posOk(e) && (exact.has(e.id) || norm(e.bg).includes(nq) || norm(e.ru).includes(nq)));
+    res = live().filter(e => posOk(e) && (exact.has(e.id) || norm(e.bg).includes(nq) || norm(e.ru).includes(nq)));
     res.sort((a, b) => score(b, nq, exact) - score(a, nq, exact) || norm(a.bg).localeCompare(norm(b.bg), 'bg'));
   } else {
-    res = DICT.filter(posOk);
+    res = live().filter(posOk);
     if (dictMode === 'ru') { res = res.slice().sort((a, b) => norm(a.ru).localeCompare(norm(b.ru), 'ru')); if (dictLetter) res = res.filter(e => norm(e.ru).startsWith(dictLetter.toLowerCase())); }
     else { res = res.slice().sort((a, b) => norm(a.bg).localeCompare(norm(b.bg), 'bg')); if (dictLetter) res = res.filter(e => norm(e.bg).startsWith(dictLetter.toLowerCase())); }
   }
   const total = res.length; res = res.slice(0, 300);
   box.innerHTML = (res.length ? res.map(e => dictMode === 'ru' && !nq ?
     '<div class="entry" data-e="' + e.id + '"><div>' + esc(e.ru) + '</div><div class="r"><b style="color:var(--ink)">' + st(e.bg) + '</b></div></div>' :
-    '<div class="entry" data-e="' + e.id + '"><div><span class="h">' + st(e.bg) + '</span><span class="p">' + esc(shortPos(e)) + '</span></div><div class="r">' + esc(e.ru) + '</div></div>').join('') : '<p class="muted">Ничего не найдено</p>') +
+    '<div class="entry" data-e="' + e.id + '"><div><span class="h">' + st(e.bg) + '</span><span class="p">' + esc(shortPos(e)) + '</span>' + (e.uid ? '<span class="srcb">' + esc(e.bulk ? 'кратк.' : 'мой') + '</span>' : '') + (e.add && e.add.length ? '<span class="srcb">+' + e.add.length + '</span>' : '') + '</div><div class="r">' + esc(e.ru) + '</div></div>').join('') : '<p class="muted">Ничего не найдено</p>') +
     (total > 300 ? '<p class="muted small">Показано 300 из ' + total + '. Уточните запрос или выберите букву.</p>' : '<p class="muted small">Найдено: ' + total + '</p>');
   box.querySelectorAll('[data-e]').forEach(r => r.onclick = () => openEntry(DICT[+r.dataset.e]));
   const ext = $('#dext'); if (ext) ext.innerHTML = extDictHtml(q);
@@ -7769,73 +7779,161 @@ function fillDict(q) {
 function score(e, q, exact) { const b = norm(e.bg), r = norm(e.ru); let s = 0; if (exact.has(e.id)) s += 5; if (b === q) s += 10; if (b.startsWith(q)) s += 4; if (r.split(/[,;() ]+/).includes(q)) s += 6; if (r.startsWith(q)) s += 3; return s; }
 function shortPos(e) { const m = { 'м': 'м.', 'ж': 'ж.', 'ср': 'ср.', 'мн': 'мн.', 'пр': 'прил.', 'гл': e.g.asp || 'гл.', 'нар': 'нар.', 'мест': 'мест.', 'числ': 'числ.', 'предл': 'предл.', 'съюз': 'союз', 'част': 'част.', 'межд': 'межд.', 'фр': 'выраж.' }; return m[e.pos] || e.pos; }
 
-/* ----- карточка слова ----- */
+/* ----- карточка слова: значения + все словоформы (как в rechnik.chitanka.info) ----- */
 const PERS = ['аз', 'ти', 'той, тя, то', 'ние', 'вие', 'те'];
-function tbl6(title, arr, pre) {
+const SUM = ['съм', 'си', 'е', 'сме', 'сте', 'са'];
+const BYAH = ['бях', 'беше', 'беше', 'бяхме', 'бяхте', 'бяха'];
+const SHTYAH = ['щях', 'щеше', 'щеше', 'щяхме', 'щяхте', 'щяха'];
+const BIH = ['бих', 'би', 'би', 'бихме', 'бихте', 'биха'];
+const SHTE_SUM = ['ще съм', 'ще си', 'ще е', 'ще сме', 'ще сте', 'ще са'];
+const REN_AUX = ['съм', 'си', '', 'сме', 'сте', ''];
+function tbl6(title, arr, note) {
   if (!arr) return '';
-  return '<h3>' + title + '</h3><div class="tbl"><table><tbody>' + arr.map((x, i) => '<tr><td class="muted" style="width:36%">' + PERS[i] + '</td><td>' + st((pre ? pre(i) : '') + x) + '</td></tr>').join('') + '</tbody></table></div>';
+  return '<h3>' + title + '</h3>' + (note ? '<div class="small muted" style="margin:-4px 0 6px">' + note + '</div>' : '') + '<div class="tbl"><table><tbody>' + arr.map((x, i) => '<tr><td class="muted" style="width:30%">' + PERS[i] + '</td><td>' + st(x) + '</td></tr>').join('') + '</tbody></table></div>';
 }
-function openEntry(e, form) {
-  let h = '<div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="big">' + st(e.bg) + '</div><div class="muted">' + esc(POS[e.pos] || e.pos) + (e.g.asp ? ' · ' + (e.g.asp === 'нсв' ? 'несовершенный вид' : e.g.asp === 'св' ? 'совершенный вид' : 'двувидовой') : '') + (e.g.cl ? ' · ' + ({ 1: 'I', 2: 'II', 3: 'III' }[e.g.cl] || e.g.cl) + ' спряжение' : '') + '</div></div>' + sayBtn(e.bg) + '</div>';
-  if (form && norm(form) !== norm(e.bg)) h += '<div class="tag">форма «' + esc(form) + '»</div>';
-  h += '<p style="font-size:1.1em;margin:10px 0">' + esc(e.ru) + '</p>';
-  if (e.g['пара']) h += '<p>Видовая пара: ' + e.g['пара'].split(',').map(x => '<b class="wordlink" data-find="' + esc(plain(x.trim())) + '">' + st(x.trim()) + '</b>').join(', ') + '</p>';
-  if (e.g['прим']) h += '<div class="tip">' + inl(e.g['прим']) + '</div>';
-  if (e.g['пр']) h += '<div class="exs">' + e.g['пр'].split(' ;; ').map(x => { const [bg, ru] = x.split(' = '); return '<div class="ex">' + sayBtn(bg) + '<div><div class="bg">' + st(bg) + '</div><div class="ru">' + esc(ru || '') + '</div></div></div>'; }).join('') + '</div>';
-  if (e._n) {
-    const n = e._n; const rows = [];
+/* частица ще/да/няма да + форма; возвратная частица встаёт после частицы: «ще се сме́я» */
+function withPre(pre, form) { const [b, r] = splitRefl(form); return pre + (r || '') + ' ' + b; }
+/* сложная форма: причастие + вспомогательный глагол (с возвратной частицей на правильном месте) */
+function cmp(aux, p, R) {
+  if (!aux) return p + (R || '');
+  if (['съм', 'си', 'сме', 'сте'].includes(aux)) return p + ' ' + aux + (R || '');
+  if (aux === 'е') return R ? p + R + ' е' : p + ' е';
+  if (aux === 'са') return p + ' са' + (R || '');
+  if (R && / е$/.test(aux)) return aux.slice(0, -2) + R + ' е ' + p;
+  return aux + (R || '') + ' ' + p;
+}
+/* причастие на -л от формы 1 л. ед. ч. на -х (имперфект или аорист) */
+function lPart(x1, cl) {
+  x1 = splitRefl(String(x1))[0]; if (!/х$/.test(x1)) return null;
+  const m = x1.replace(/х$/, 'л'); const fem = m;
+  let pl = fem + 'и'; if (cl !== '3' && /[^аеиоуъюя]я́?л$/.test(m)) pl = pl.replace(/я(́?)ли$/, 'е$1ли');
+  return [autoSt(m), fem + 'а', fem + 'о', pl];
+}
+function defForms(p) { // членувани форми на причастие/прилагательное
+  const s = p[0]; const mdef = /[иИ]́?$/.test(s) ? [s + 'ят', s + 'я'] : [p[3] + 'ят', p[3] + 'я'];
+  return [mdef[0] + ' / ' + mdef[1], p[1] + 'та', p[2] + 'то', p[3] + 'те'];
+}
+function verbExtra(e, v) {
+  const R = v.refl || '';
+  const x = {};
+  x.ipart = v.imp ? lPart(v.imp[0], v.cl) : null;              // минало несвършено деятелно причастие
+  const s3 = splitRefl(v.pres[2])[0];
+  if (v.asp !== 'св') {
+    const base = /и́?$/.test(s3) ? s3.replace(/и(́?)$/, 'е$1') : s3;
+    x.prap = [base + 'щ', base + 'ща', base + 'що', base + 'щи'];  // сегашно деятелно причастие
+    x.adv = base + 'йки';                                          // деепричастие
+  }
+  if (!R && v.aor) {                                              // минало страдателно причастие (у переходных глаголов)
+    const a = splitRefl(v.aor[0])[0]; let s = null; const P = plain(a);
+    if (/[ая]х$/.test(P)) s = a.replace(/х$/, 'н');
+    else if (/их$/.test(P)) s = /и́х$/.test(a) ? plain(a).replace(/их$/, 'ен') : a.replace(/их$/, 'ен');
+    else if (/ох$/.test(P)) s = plain(a).replace(/ох$/, 'ен').replace(/к(ен)$/, 'ч$1').replace(/г(ен)$/, 'ж$1');
+    if (s) x.ppp = [s, s + 'а', s + 'о', s + 'и'];
+  }
+  return x;
+}
+function partTbl(title, p, note, noDef) {
+  if (!p) return '';
+  const d = noDef ? null : defForms(p);
+  return '<h3>' + title + '</h3>' + (note ? '<div class="small muted" style="margin:-4px 0 6px">' + note + '</div>' : '') + '<div class="tbl"><table><thead><tr><th></th><th>форма</th>' + (d ? '<th>с артиклем</th>' : '') + '</tr></thead><tbody>' +
+    ['м. р.', 'ж. р.', 'ср. р.', 'мн. ч.'].map((g, i) => '<tr><td class="muted">' + g + '</td><td>' + st(p[i]) + '</td>' + (d ? '<td>' + st(d[i]) + '</td>' : '') + '</tr>').join('') + '</tbody></table></div>';
+}
+function verbSections(e) {
+  const v = e._v || verbForms(e); const R = v.refl || ''; const x = verbExtra(e, v);
+  const P = v.part ? v.part.map(p => splitRefl(p)[0]) : null;
+  const sg = p => p[0] + ' / ' + p[1] + ' / ' + p[2];
+  const comp = (aux, p) => aux.map((a, i) => cmp(a, i < 3 ? sg(p) : p[3], R));
+  const IP = x.ipart;
+  const S = {};
+  S.now = tbl6('Настоящее время <span class="muted small">(сегашно време)</span>', v.pres) +
+    tbl6('Будущее время <span class="muted small">(бъдеще време)</span>', v.pres.map(f => withPre('ще', f))) +
+    tbl6('Отрицание будущего', v.pres.map(f => withPre('ня́ма да', f))) +
+    (v.impv ? '<h3>Повелительное наклонение</h3><div class="tbl"><table><tbody><tr><td class="muted" style="width:30%">ти</td><td>' + st(v.impv[0]) + '</td></tr><tr><td class="muted">вие</td><td>' + st(v.impv[1] || '') + '</td></tr><tr><td class="muted">запрет</td><td>' + (v.asp === 'св' ? '<span class="small muted">обычно от несовершенного вида' + (e.g['пара'] ? ': не + ' + st(e.g['пара'].split(',')[0]) + '…' : '') + '</span>' : st('не ' + v.impv[0])) + '<div class="small">' + st(withPre('неде́й да', v.pres[1])) + '</div></td></tr></tbody></table></div>' : '');
+  S.past = (v.aor ? tbl6('Аорист <span class="muted small">(минало свършено)</span>', v.aor, 'законченное действие в прошлом: что сделал') : '') +
+    tbl6('Имперфект <span class="muted small">(минало несвършено)</span>', v.imp, 'фон, процесс, повторение в прошлом') +
+    (P ? tbl6('Перфект <span class="muted small">(минало неопределено)</span>', comp(SUM, P), 'результат к настоящему; м. / ж. / ср. род') +
+      tbl6('Плюсквамперфект <span class="muted small">(минало предварително)</span>', comp(BYAH, P), 'действие раньше другого прошедшего') : '<p class="muted small">Причастие не указано — сложные времена не построены.</p>');
+  const auxC = (list, p) => list.map((a, i) => cmp(a, i < 3 ? sg(p) : p[3], R));
+  S.fut = tbl6('Будущее в прошедшем <span class="muted small">(бъдеще в миналото)</span>', v.pres.map((f, i) => withPre(SHTYAH[i] + ' да', f))) +
+    (P ? tbl6('Будущее предварительное <span class="muted small">(бъдеще предварително)</span>', auxC(SHTE_SUM, P), 'к определённому моменту в будущем: «ще съм прочел»') +
+      tbl6('Будущее предварительное в прошедшем', auxC(['щях да съм', 'щеше да си', 'щеше да е', 'щя́хме да сме', 'щя́хте да сте', 'щя́ха да са'], P)) : '');
+  S.ren = '<p class="small muted">Пересказывательное наклонение (преизказно) — когда сообщаем то, что знаем с чужих слов: «говорят, что…». В 3-м лице вспомогательный глагол выпадает.</p>' +
+    (IP ? tbl6('Настоящее и имперфект пересказ.', comp(REN_AUX, IP)) : '') +
+    (P ? tbl6('Аорист пересказ.', comp(REN_AUX, P)) +
+      tbl6('Перфект пересказ.', ['бил съм', 'бил си', 'бил', 'би́ли сме', 'би́ли сте', 'би́ли'].map((a, i) => cmp(a, i < 3 ? P[0] : P[3], R)), 'ж. р.: била́ съм ' + P[1] + '…') : '') +
+    tbl6('Будущее пересказ.', v.pres.map((f, i) => withPre(['щял съм', 'щял си', 'щял', 'ще́ли сме', 'ще́ли сте', 'ще́ли'][i] + ' да', f)), 'ж. р.: щя́ла съм да…') +
+    (P ? tbl6('Будущее предварит. пересказ.', ['щял съм да съм', 'щял си да си', 'щял да е', 'ще́ли сме да сме', 'ще́ли сте да сте', 'ще́ли да са'].map((a, i) => cmp(a, i < 3 ? P[0] : P[3], R))) : '');
+  S.cond = (P ? tbl6('Условное наклонение <span class="muted small">(условно)</span>', comp(BIH, P), 'бих + причастие: «я бы сделал»') : '') +
+    (v.impv ? '<h3>Повелительное наклонение</h3><div class="tbl"><table><tbody><tr><td class="muted" style="width:30%">ти</td><td>' + st(v.impv[0]) + '</td></tr><tr><td class="muted">вие</td><td>' + st(v.impv[1] || '') + '</td></tr></tbody></table></div>' : '');
+  S.part = partTbl('Прошедшее деятельное причастие (аористное)', v.part, 'для перфекта, условного, пересказа: «чел съм», «бих чел»') +
+    partTbl('Прошедшее деятельное причастие (имперфектное)', IP, 'только для пересказывательного наклонения', true) +
+    (x.prap ? partTbl('Настоящее деятельное причастие', x.prap, 'читающий, говорящий') : '') +
+    (x.ppp ? partTbl('Прошедшее страдательное причастие', x.ppp.map(f => f), 'только у переходных глаголов: «прочитан», «написан»' + (/[^́]/.test(x.ppp[0]) && !x.ppp[0].includes(ACC) ? ' · ударение проверьте' : '')) : '') +
+    (x.adv ? '<h3>Деепричастие</h3><div class="tbl"><table><tbody><tr><td>' + st(x.adv) + '</td></tr></tbody></table></div>' : '');
+  return S;
+}
+const VTABS = [['now', 'Настоящее и будущее'], ['past', 'Прошедшие'], ['fut', 'Сложные будущие'], ['ren', 'Пересказ'], ['cond', 'Условное'], ['part', 'Причастия'], ['all', 'Все формы']];
+function formsBlock(e) {
+  let h = '';
+  if (['м', 'ж', 'ср'].includes(e.pos)) {
+    const n = e._n || nounForms(e); const rows = []; let gl = false;
+    if (!n.pl && e.pos !== 'мн') { const gp = guessPlural(e.bg, e.pos); if (gp) { n.pl = gp; n.pldef = /[аяАЯ]́?$/.test(gp) ? gp + 'та' : gp + 'те'; gl = true; } }
     rows.push(['Единственное число', st(e.bg)]);
-    if (n.def) rows.push(['Ед. ч. с артиклем', n.def.map(st).join(' / ') + (n.def.length > 1 ? '<div class="small muted">полный член / краткий член</div>' : '')]);
-    if (n.pl) rows.push(['Множественное число', st(n.pl)]);
-    if (n.pldef) rows.push(['Мн. ч. с артиклем', st(n.pldef)]);
+    if (n.def) rows.push([n.def.length > 1 ? 'С артиклем: полный / краткий' : 'С артиклем', n.def.map(st).join(' / ') + (n.def.length > 1 ? '<div class="small muted">полный — у подлежащего, краткий — в остальных случаях</div>' : '')]);
+    if (n.pl) rows.push(['Множественное число', (gl ? '≈ ' : '') + st(n.pl)]);
+    if (n.pldef) rows.push(['Мн. ч. с артиклем', (gl ? '≈ ' : '') + st(n.pldef)]);
     if (n.cnt) rows.push(['Счётная форма', st(n.cnt) + ' <span class="small muted">(два, три… + сущ.)</span>']);
     if (n.voc) rows.push(['Звательная форма', st(n.voc)]);
-    h += '<h3>Формы</h3><div class="tbl"><table><tbody>' + rows.map(r => '<tr><td class="muted" style="width:44%">' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('') + '</tbody></table></div>';
-  }
-  if (e._a) {
-    const a = e._a;
-    h += '<h3>Формы прилагательного</h3><div class="tbl"><table><thead><tr><th></th><th>без артикля</th><th>с артиклем</th></tr></thead><tbody>' +
-      '<tr><td class="muted">м. р.</td><td>' + st(a.m) + '</td><td>' + st(a.mdef[0]) + ' / ' + st(a.mdef[1]) + '</td></tr>' +
+    h += '<h3>Формы существительного</h3><div class="tbl"><table><tbody>' + rows.map(r => '<tr><td class="muted" style="width:42%">' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('') + '</tbody></table></div>';
+    if (gl) h += '<p class="small muted">≈ множественное число предложено по правилам — проверьте и уточните в редакторе.</p>';
+  } else if (e.pos === 'пр' || (['мест', 'числ'].includes(e.pos) && e.g['ф'])) {
+    const a = e._a || adjForms(e);
+    h += '<h3>Формы по родам и числам</h3><div class="tbl"><table><thead><tr><th></th><th>без артикля</th><th>с артиклем</th></tr></thead><tbody>' +
+      '<tr><td class="muted">м. р.</td><td>' + st(a.m) + '</td><td>' + st(a.mdef[0]) + ' / ' + st(a.mdef[1]) + '<div class="small muted">полный / краткий</div></td></tr>' +
       '<tr><td class="muted">ж. р.</td><td>' + st(a.f) + '</td><td>' + st(a.fdef) + '</td></tr>' +
       '<tr><td class="muted">ср. р.</td><td>' + st(a.n) + '</td><td>' + st(a.ndef) + '</td></tr>' +
       '<tr><td class="muted">мн. ч.</td><td>' + st(a.pl) + '</td><td>' + st(a.pldef) + '</td></tr></tbody></table></div>';
-    if (e.g['ср.ст'] !== 'нет' && !/ски$/.test(plain(e.bg))) h += '<p class="small muted">Сравнительная степень: ' + st('по-' + e.bg) + ', превосходная: ' + st('на́й-' + e.bg) + '</p>';
+    if (e.pos === 'пр' && e.g['ср.ст'] !== 'нет' && !/ски$/.test(plain(e.bg))) h += '<h3>Степени сравнения</h3><div class="tbl"><table><tbody><tr><td class="muted" style="width:42%">сравнительная</td><td>' + st('по-' + e.bg) + ', ' + st('по-' + a.f) + ', ' + st('по-' + a.n) + ', ' + st('по-' + a.pl) + '</td></tr><tr><td class="muted">превосходная</td><td>' + st('на́й-' + e.bg) + ', ' + st('на́й-' + a.f) + ', ' + st('на́й-' + a.n) + ', ' + st('на́й-' + a.pl) + '</td></tr></tbody></table></div>';
+  } else if (e.pos === 'гл') {
+    h += '<div class="chips vtabs">' + VTABS.map(([k, n], i) => '<button class="chip' + (i ? '' : ' on') + '" data-vt="' + k + '">' + n + '</button>').join('') + '</div><div class="vbody"></div>' +
+      '<p class="small muted">Словарная форма болгарского глагола — 1-е лицо ед. ч. настоящего времени (инфинитива нет).' + (e.g.auto ? ' Формы предложены автоматически — проверьте их в редакторе.' : '') + '</p>';
   }
-  if (e._v) {
-    const v = e._v;
-    h += '<div class="seg" id="vseg"><button class="on" data-vt="pres">Наст.</button><button data-vt="past">Прош.</button><button data-vt="fut">Буд.</button><button data-vt="more">Ещё</button></div><div id="vbody"></div>';
-    h += '<p class="small muted">Словарная форма болгарского глагола — 1-е лицо ед. ч. настоящего времени (инфинитива нет).</p>';
-    openSheet(h, e);
-    const body = $('#vbody');
-    const SUM = ['съм', 'си', 'е', 'сме', 'сте', 'са'];
-    const BYAH = ['бях', 'беше', 'беше', 'бяхме', 'бяхте', 'бяха'];
-    const SHTYAH = ['щях', 'щеше', 'щеше', 'щяхме', 'щяхте', 'щяха'];
-    const BIH = ['бих', 'би', 'би', 'бихме', 'бихте', 'биха'];
-    const pg = i => v.part ? (i < 3 ? v.part[0] + ' / ' + v.part[1] : v.part[3]) : '';
-    const R = v.refl;
-    const withAux = (aux, i) => { const p = v.part ? (i < 3 ? splitRefl(v.part[0])[0] : v.part[3]) : ''; return R ? aux + R + ' ' + p : aux + ' ' + p; };
-    const T = {
-      pres: () => tbl6('Настоящее время (сегашно време)', v.pres) + (v.impv ? '<h3>Повелительное наклонение</h3><div class="tbl"><table><tbody><tr><td class="muted" style="width:36%">ти</td><td>' + st(v.impv[0]) + '</td></tr><tr><td class="muted">вие</td><td>' + st(v.impv[1] || '') + '</td></tr><tr><td class="muted">запрет</td><td>' + st('не ' + (v.asp === 'св' && e.g['пара'] ? '(НСВ) …' : v.impv[0])) + ' · ' + st('неде́й да ' + v.pres[1]) + '</td></tr></tbody></table></div>' : ''),
-      past: () => (v.aor ? tbl6('Аорист (минало свършено време) — завершённое действие', v.aor) : '') + tbl6('Имперфект (минало несвършено време) — фон, процесс, повторение', v.imp) +
-        (v.part ? '<h3>Перфект (минало неопределено време)</h3><div class="tbl"><table><tbody>' + SUM.map((a, i) => '<tr><td class="muted" style="width:36%">' + PERS[i] + '</td><td>' + st(perf(a, i)) + '</td></tr>').join('') + '</tbody></table></div>' : ''),
-      fut: () => tbl6('Будущее время (бъдеще време)', v.pres.map(x => 'ще ' + x)) + tbl6('Отрицание будущего', v.pres.map(x => 'ня́ма да ' + x)) + tbl6('Будущее в прошедшем', v.pres.map((x, i) => SHTYAH[i] + ' да ' + x)),
-      more: () => (v.part ? '<h3>Причастие на -л (аористное)</h3><div class="tbl"><table><tbody><tr><td class="muted">м. р.</td><td>' + st(v.part[0]) + '</td></tr><tr><td class="muted">ж. р.</td><td>' + st(v.part[1]) + '</td></tr><tr><td class="muted">ср. р.</td><td>' + st(v.part[2]) + '</td></tr><tr><td class="muted">мн. ч.</td><td>' + st(v.part[3]) + '</td></tr></tbody></table></div>' +
-        tbl6('Условное наклонение', BIH.map((b, i) => (R ? b + R : b) + ' ' + (i < 3 ? splitRefl(v.part[0])[0] + '(-' + plain(splitRefl(v.part[1])[0]).slice(-2) + ')' : v.part[3]))) +
-        tbl6('Плюсквамперфект (минало предварително)', BYAH.map((b, i) => (R ? b + R : b) + ' ' + (i < 3 ? splitRefl(v.part[0])[0] : v.part[3]))) +
-        tbl6('Пересказывательное наклонение (аорист)', v.part.length ? ['съм ' + v.part[0], 'си ' + v.part[0], v.part[0], 'сме ' + v.part[3], 'сте ' + v.part[3], v.part[3]].map(x => R ? x.replace(/^(съм|си|сме|сте) /, '$1' + R + ' ').replace(/^([^ ]+)$/, R.trim() + ' $1') : x) : null) : '<p class="muted">Формы причастия не указаны.</p>')
-    };
-    function perf(a, i) { const p = i < 3 ? splitRefl(v.part[0])[0] : v.part[3]; if (!R) return a + ' ' + p; return i === 2 ? R.trim() + ' е ' + p : a + R + ' ' + p; }
-    const show = k => { body.innerHTML = T[k](); };
-    show('pres');
-    $('#vseg').querySelectorAll('button').forEach(b => b.onclick = () => { $('#vseg').querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); show(b.dataset.vt); });
-    return;
-  }
-  openSheet(h, e);
+  return h;
+}
+function bindForms(box, e) {
+  const vb = box.querySelector('.vbody'); if (!vb) return;
+  let S; try { S = verbSections(e); } catch (er) { vb.innerHTML = '<p class="muted small">Не удалось построить формы: проверьте спряжение и аорист.</p>'; return; }
+  const show = k => { vb.innerHTML = k === 'all' ? VTABS.slice(0, -1).map(([kk, n]) => '<div class="part-h">' + n + '</div>' + S[kk]).join('') : S[k]; };
+  show('now');
+  box.querySelectorAll('.vtabs [data-vt]').forEach(b => b.onclick = () => { box.querySelectorAll('.vtabs [data-vt]').forEach(x => x.classList.remove('on')); b.classList.add('on'); show(b.dataset.vt); });
+}
+function aspName(a) { return a === 'нсв' ? 'несовершенный вид' : a === 'св' ? 'совершенный вид' : a === 'дв' ? 'двувидовой' : ''; }
+function openEntry(e, form) {
+  if (!e) return;
+  let h = '<div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="big">' + st(e.bg) + (e.bg.includes(ACC) || vowelsCount(e.bg) < 2 ? '' : ' <span class="tag" title="ударение не указано">без ударения</span>') + '</div><div class="muted">' + esc(POS[e.pos] || e.pos) + (e.g.asp ? ' · ' + aspName(e.g.asp) : '') + (e.g.cl ? ' · ' + ({ 1: 'I', 2: 'II', 3: 'III' }[e.g.cl] || e.g.cl) + ' спряжение' : '') + (e.g['перех'] ? ' · переходный' : '') + '</div>' +
+    (e.src ? '<div class="small muted">Источник: ' + esc(e.src) + '</div>' : '') + '</div>' + sayBtn(e.bg) + '</div>';
+  if (form && norm(form) !== norm(e.bg)) h += '<div class="tag">форма «' + esc(form) + '»</div>';
+  h += '<p style="font-size:1.1em;margin:10px 0">' + esc(e.ru) + '</p>';
+  (e.add || []).forEach(a => { h += '<div class="addm"><div>' + (a.ru ? esc(a.ru) : '') + (a.src ? ' <span class="small muted">· ' + esc(a.src) + '</span>' : '') + '</div>' + (a.ex || []).map(([b, r]) => '<div class="small">' + sayBtnInline(b) + ' ' + st(b) + (r ? ' — <span class="muted">' + esc(r) + '</span>' : '') + '</div>').join('') + (a.uid ? '<button class="chip" data-delm="' + a.uid + '">✕</button>' : '') + '</div>'; });
+  if (e.g['пара']) h += '<p>Видовая пара: ' + e.g['пара'].split(',').map(x => '<b class="wordlink" data-find="' + esc(plain(x.trim())) + '">' + st(x.trim()) + '</b>').join(', ') + '</p>';
+  if (e.g['прим']) h += '<div class="tip">' + inl(e.g['прим']) + '</div>';
+  const exs = (e.g['пр'] ? e.g['пр'].split(' ;; ').map(x => x.split(' = ')) : []).concat(e.ex || []);
+  if (exs.length) h += '<div class="exs">' + exs.map(([bg, ru]) => '<div class="ex">' + sayBtn(bg) + '<div><div class="bg">' + st(bg) + '</div><div class="ru">' + esc(ru || '') + '</div></div></div>').join('') + '</div>';
+  h += '<div class="eforms">' + formsBlock(e) + '</div>';
+  h += '<div class="row" style="margin-top:16px"><button class="btn ghost" id="addCard">' + (srs[e.key] ? '✓ В карточках' : '+ В карточки') + '</button>' +
+    '<button class="btn ghost" id="addMean">+ Значение / пример</button>' +
+    '<button class="btn ghost" id="editE">' + (e.uid ? '✎ Изменить' : '✎ Уточнить') + '</button></div>' +
+    '<p class="small" style="margin-top:10px"><a target="_blank" rel="noopener" href="https://rechnik.chitanka.info/w/' + encodeURIComponent(plain(splitRefl(e.bg)[0])) + '">Проверить в rechnik.chitanka.info ↗</a> <span class="muted">(нужен интернет)</span></p>';
+  $('#sheetBody').innerHTML = h; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); $('#sheet').scrollTop = 0;
+  bindForms($('#sheetBody'), e);
+  const ac = $('#addCard'); ac.onclick = () => { if (!srs[e.key]) { srs[e.key] = { b: 0, d: 0 }; store.set('srs', srs); ac.textContent = '✓ В карточках'; toast('Добавлено в карточки'); } };
+  $('#addMean').onclick = () => openAddMeaning(e);
+  $('#editE').onclick = () => openEditor(e);
+  $('#sheetBody').querySelectorAll('[data-find]').forEach(x => x.onclick = () => { const r = lookup(x.dataset.find); if (r.length) openEntry(r[0]); });
+  $('#sheetBody').querySelectorAll('[data-delm]').forEach(x => x.onclick = async () => { if (!confirm('Удалить это дополнение?')) return; await delUentry(x.dataset.delm); openEntry(DICT.find(z => z.key === e.key && !z.del) || e); });
 }
 function openSheet(h, e) {
-  if (e) h += '<div class="row" style="margin-top:16px"><button class="btn ghost" id="addCard">' + (srs[e.key] ? '✓ В карточках' : '+ В карточки') + '</button></div>';
   $('#sheetBody').innerHTML = h; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); $('#sheet').scrollTop = 0;
-  const ac = $('#addCard'); if (ac) ac.onclick = () => { if (!srs[e.key]) { srs[e.key] = { b: 0, d: 0 }; store.set('srs', srs); ac.textContent = '✓ В карточках'; toast('Добавлено в карточки'); } };
   $('#sheetBody').querySelectorAll('[data-find]').forEach(x => x.onclick = () => { const r = lookup(x.dataset.find); if (r.length) openEntry(r[0]); });
 }
 function closeSheet() { $('#sheet').classList.remove('open'); $('#sheetBg').classList.remove('open'); }
@@ -7855,7 +7953,7 @@ function renderGrammarList() {
   const vq = $('#vq'); vq.oninput = () => {
     const words = norm(vq.value).replace(/^(ще|ня́ма да|няма да|да)\s+/, '').split(/\s+/);
     const r = []; words.forEach(w => lookup(w).filter(e => e.pos === 'гл').forEach(e => { if (!r.includes(e)) r.push(e); }));
-    if (!r.length && words[0]) DICT.filter(e => e.pos === 'гл' && norm(e.bg).startsWith(words[0])).slice(0, 8).forEach(e => r.push(e));
+    if (!r.length && words[0]) live().filter(e => e.pos === 'гл' && norm(e.bg).startsWith(words[0])).slice(0, 8).forEach(e => r.push(e));
     $('#vres').innerHTML = r.map(e => '<div class="entry" data-e="' + e.id + '"><span class="h">' + st(e.bg) + '</span><span class="r">' + esc(e.ru) + '</span></div>').join('');
     $('#vres').querySelectorAll('[data-e]').forEach(x => x.onclick = () => openEntry(DICT[+x.dataset.e]));
   };
@@ -7866,26 +7964,28 @@ const INTERVALS = [0, 1, 2, 4, 8, 16, 32];
 const today = () => Math.floor(Date.now() / 86400000);
 let cardSet = 'all', cardQ = [], cardI = 0, flipped = false;
 function deckEntries() {
-  if (cardSet === 'mine') return DICT.concat(MYE).filter(e => srs[e.key]);
+  const LV = live().filter(e => !e.bulk);
+  if (cardSet === 'mine') return live().concat(MYE).filter(e => srs[e.key]);
+  if (cardSet === 'udict') return LV.filter(e => e.uid);
   if (cardSet === 'my') return MYE;
-  if (cardSet === 'verbs') return DICT.filter(e => e.pos === 'гл');
-  if (cardSet === 'nouns') return DICT.filter(e => ['м', 'ж', 'ср'].includes(e.pos));
-  if (cardSet === 'adj') return DICT.filter(e => e.pos === 'пр');
-  if (cardSet === 'phr') return DICT.filter(e => e.pos === 'фр');
-  if (cardSet.startsWith('t:')) return DICT.filter(e => e.g['тема'] === cardSet.slice(2));
-  return DICT;
+  if (cardSet === 'verbs') return LV.filter(e => e.pos === 'гл');
+  if (cardSet === 'nouns') return LV.filter(e => ['м', 'ж', 'ср'].includes(e.pos));
+  if (cardSet === 'adj') return LV.filter(e => e.pos === 'пр');
+  if (cardSet === 'phr') return LV.filter(e => e.pos === 'фр');
+  if (cardSet.startsWith('t:')) return LV.filter(e => e.g['тема'] === cardSet.slice(2));
+  return LV;
 }
 function renderCards() {
   setTitle('Карточки', false);
   const topics = [...new Set(DICT.map(e => e.g['тема']).filter(Boolean))].sort();
-  const mine = DICT.concat(MYE).filter(e => srs[e.key]); const due = mine.filter(e => srs[e.key].d <= today()).length;
+  const mine = live().concat(MYE).filter(e => srs[e.key]); const due = mine.filter(e => srs[e.key].d <= today()).length;
   let h = '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Мои карточки</b><div class="muted small">' + mine.length + ' слов · к повторению сегодня: ' + due + '</div></div><button class="btn" id="startMine">Повторять</button></div></div>';
-  h += '<div class="card"><b>Тренировка по наборам</b><div class="chips">' + (MYE.length ? [['my', 'Из моих книг (' + MYE.length + ')']] : []).concat([['all', 'Все слова'], ['verbs', 'Глаголы'], ['nouns', 'Существительные'], ['adj', 'Прилагательные'], ['phr', 'Выражения']]).concat(topics.map(t => ['t:' + t, t])).map(([k, n]) => '<button class="chip' + (cardSet === k ? ' on' : '') + '" data-set="' + k + '">' + esc(n) + '</button>').join('') + '</div>' +
+  h += '<div class="card"><b>Тренировка по наборам</b><div class="chips">' + (MYE.length ? [['my', 'Из моих книг (' + MYE.length + ')']] : []).concat(live().some(e => e.uid && !e.bulk) ? [['udict', 'Мой словарь (' + live().filter(e => e.uid && !e.bulk).length + ')']] : []).concat([['all', 'Все слова'], ['verbs', 'Глаголы'], ['nouns', 'Существительные'], ['adj', 'Прилагательные'], ['phr', 'Выражения']]).concat(topics.map(t => ['t:' + t, t])).map(([k, n]) => '<button class="chip' + (cardSet === k ? ' on' : '') + '" data-set="' + k + '">' + esc(n) + '</button>').join('') + '</div>' +
     '<div class="seg"><button data-dir="bg" class="' + (S.cardDir === 'bg' ? 'on' : '') + '">БГ → РУ</button><button data-dir="ru" class="' + (S.cardDir === 'ru' ? 'on' : '') + '">РУ → БГ</button></div><button class="btn ghost" id="startSet">Начать (20 карточек)</button></div><div id="cardArea"></div>';
   view.innerHTML = h;
   view.querySelectorAll('[data-set]').forEach(b => b.onclick = () => { cardSet = b.dataset.set; renderCards(); });
   view.querySelectorAll('[data-dir]').forEach(b => b.onclick = () => { S.cardDir = b.dataset.dir; saveS(); renderCards(); });
-  $('#startMine').onclick = () => { const m = DICT.concat(MYE).filter(e => srs[e.key] && srs[e.key].d <= today()); if (!m.length) { toast('Нет карточек к повторению. Добавляйте слова из словаря «+ В карточки»'); return; } startCards(shuffle(m).slice(0, 30)); };
+  $('#startMine').onclick = () => { const m = live().concat(MYE).filter(e => srs[e.key] && srs[e.key].d <= today()); if (!m.length) { toast('Нет карточек к повторению. Добавляйте слова из словаря «+ В карточки»'); return; } startCards(shuffle(m).slice(0, 30)); };
   $('#startSet').onclick = () => { const d = deckEntries(); if (!d.length) { toast('Набор пуст'); return; } startCards(shuffle(d.slice()).slice(0, 20)); };
 }
 function startCards(q) { cardQ = q; cardI = 0; flipped = false; showCard(); }
@@ -7918,9 +8018,9 @@ function renderSettings() {
     '<div class="set-row"><span>Скорость: <b id="rv">' + S.rate + '</b></span><input id="sRate" type="range" min="0.5" max="1.2" step="0.05" value="' + S.rate + '"></div>' +
     '<div class="set-row"><span>Проверить</span><button class="btn ghost" id="sTest">▶ Здраве́йте!</button></div>' +
     '<p class="small muted">На iPhone болгарский голос включается так: Настройки → Универсальный доступ → Устный контент → Голоса → Болгарский → загрузите голос (например, «Daria»).</p></div>' +
-    '<div class="card"><b>Прогресс</b><p class="small muted">Данные хранятся только на этом устройстве. Сохраните резервную копию (прогресс, карточки и «Мой словарь»), чтобы перенести их на iPad или другой телефон. Книги и словари в копию не входят — их загружают из файлов заново.</p><p class="small muted" id="stUse"></p>' +
+    '<div class="card"><b>Прогресс</b><p class="small muted">Данные хранятся только на этом устройстве. Сохраните резервную копию (прогресс, карточки, «Мои слова» и ваши статьи словаря), чтобы перенести их на iPad или другой телефон. Книги и словари в копию не входят — их загружают из файлов заново.</p><p class="small muted" id="stUse"></p>' +
     '<div class="row"><button class="btn ghost" id="exp">Сохранить копию</button><label class="btn ghost" style="display:inline-block">Загрузить копию<input type="file" id="imp" accept=".json,application/json" hidden></label><button class="btn red" id="rst">Сбросить</button></div></div>' +
-    '<div class="card small"><b>О приложении</b><p>Курс болгарского языка для русскоговорящих: ' + LESSONS.length + ' уроков, ' + GRAMMAR.length + ' справочных таблиц, словарь — ' + DICT.length + ' статей с грамматическими формами. Работает без интернета после первой загрузки.</p><p class="muted">© ' + new Date().getFullYear() + ' Elena Kirsanova. Все права защищены. Копирование и распространение без согласия автора запрещено.</p></div>';
+    '<div class="card small"><b>О приложении</b><p>Курс болгарского языка для русскоговорящих: ' + LESSONS.length + ' уроков, ' + GRAMMAR.length + ' справочных таблиц, словарь — ' + live().length + ' статей с грамматическими формами. Работает без интернета после первой загрузки.</p><p class="muted">© ' + new Date().getFullYear() + ' Elena Kirsanova. Все права защищены. Копирование и распространение без согласия автора запрещено.</p></div>';
   view.innerHTML = h;
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(x => { const el = $('#stUse'); if (el) el.textContent = 'Занято на устройстве: ' + (x.usage / 1048576).toFixed(1) + ' МБ (книг: ' + LIB.books.length + ', словарей: ' + LIB.dicts.length + ', слов в моём словаре: ' + LIB.words.length + ').'; }).catch(() => {});
   $('#sTheme').onchange = e => { S.theme = e.target.value; saveS(); };
@@ -7930,12 +8030,13 @@ function renderSettings() {
   $('#sVoice').onchange = e => { S.voice = e.target.value; saveS(); };
   $('#sRate').oninput = e => { S.rate = +e.target.value; $('#rv').textContent = S.rate; saveS(); };
   $('#sTest').onclick = () => say('Здравейте! Как сте?');
-  $('#exp').onclick = () => {
-    const data = JSON.stringify({ app: 'bg-course', v: 2, progress, srs, settings: S, words: LIB.words }, null, 1);
+  $('#exp').onclick = async () => {
+    let ue = []; try { ue = ((await dbAll('uentries')) || []).filter(u => !u.bulk); } catch (er) {}
+    const data = JSON.stringify({ app: 'bg-course', v: 3, progress, srs, settings: S, words: LIB.words, uentries: ue }, null, 1);
     const blob = new Blob([data], { type: 'application/json' }); const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'bulgarian-progress-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.appendChild(a); a.click(); a.remove();
   };
-  $('#imp').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (d.progress) { progress = d.progress; store.set('progress', progress); } if (d.srs) { srs = d.srs; store.set('srs', srs); } if (Array.isArray(d.words)) d.words.forEach(w => saveWord(w).catch(() => {})); toast('Прогресс загружен'); } catch (er) { toast('Неверный файл'); } }; r.readAsText(f); };
+  $('#imp').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (d.progress) { progress = d.progress; store.set('progress', progress); } if (d.srs) { srs = d.srs; store.set('srs', srs); } if (Array.isArray(d.words)) d.words.forEach(w => saveWord(w).catch(() => {})); if (Array.isArray(d.uentries)) { const us = d.uentries.slice().sort((x, y) => (x.base ? 1 : 0) - (y.base ? 1 : 0)); (async () => { for (const u of us) { try { await saveU(u); } catch (er) {} } })(); } toast('Прогресс загружен'); } catch (er) { toast('Неверный файл'); } }; r.readAsText(f); };
   $('#rst').onclick = () => { if (confirm('Сбросить прогресс уроков и карточек?')) { progress = {}; srs = {}; store.set('progress', progress); store.set('srs', srs); toast('Прогресс сброшен'); } };
 }
 
@@ -8102,10 +8203,10 @@ function idbOpen() {
   if (idbP) return idbP;
   idbP = new Promise((res, rej) => {
     if (!('indexedDB' in window)) { rej(new Error('Хранилище недоступно')); return; }
-    const r = indexedDB.open('bg-library', 1);
+    const r = indexedDB.open('bg-library', 2);
     r.onupgradeneeded = () => {
       const d = r.result;
-      ['books', 'bookdata', 'dicts', 'dictdata', 'words'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
+      ['books', 'bookdata', 'dicts', 'dictdata', 'words', 'uentries'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
       if (!d.objectStoreNames.contains('pages')) d.createObjectStore('pages', { keyPath: 'k' });
     };
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
@@ -8136,6 +8237,8 @@ async function loadLib() {
     LIB.dicts = (d || []).sort((x, y) => x.added - y.added);
     LIB.words = (w || []).sort((x, y) => y.t - x.t);
     for (const x of LIB.dicts) { if (x.kind === 'list') await loadList(x.id); else loadOcr(x).catch(() => {}); }
+    const us = (await dbAll('uentries')) || []; us.sort((x, y) => (x.t || 0) - (y.t || 0));
+    us.filter(u => !u.base).forEach(applyU); us.filter(u => u.base).forEach(applyU);
   } catch (e) { console.warn('lib', e); }
   rebuildMy(); LIB.ready = true;
 }
@@ -8332,7 +8435,7 @@ async function saveDict(p, z) {
   } else throw new Error('Неизвестный тип словаря');
   await dbPut('dicts', meta);
   LIB.dicts = LIB.dicts.filter(x => x.id !== id).concat([meta]);
-  delete LIB.lists[id]; delete LIB.ocr[id]; if (meta.kind === 'list') await loadList(id);
+  delete LIB.lists[id]; delete LIB.ocr[id]; if (meta.kind === 'list') { await loadList(id); await integrateList(meta); }
   toast('Словарь добавлен'); if (location.hash === '#/read/dicts') route(); else go('#/read/dicts');
 }
 async function deleteBook(id) {
@@ -8342,6 +8445,9 @@ async function deleteBook(id) {
 async function deleteDict(id) {
   await idb('pages', 'readwrite', o => o.delete(IDBKeyRange.bound(id + '/', id + '/￿')));
   await dbDel('dictdata', id); await dbDel('dicts', id);
+  const us = ((await dbAll('uentries')) || []).filter(u => u.srcId === id);
+  if (us.length) { const d = await idbOpen(); await new Promise(res => { const tx = d.transaction('uentries', 'readwrite'); const os = tx.objectStore('uentries'); us.forEach(u => os.delete(u.id)); tx.oncomplete = res; tx.onerror = res; }); }
+  us.forEach(u => { if (u.base) { const e = KEYMAP.get(u.base); if (e && e.add) e.add = e.add.filter(x => x.uid !== u.id); } else { const e = DICT.find(x => x.uid === u.id && !x.del); if (e) e.del = true; } });
   LIB.dicts = LIB.dicts.filter(x => x.id !== id); delete LIB.lists[id]; delete LIB.ocr[id];
 }
 
@@ -8357,7 +8463,7 @@ function stemCands(w) {
 }
 function listLookup(cands) {
   const out = [];
-  LIB.dicts.filter(d => d.kind === 'list').forEach(d => {
+  LIB.dicts.filter(d => d.kind === 'list' && !d.integrated).forEach(d => {
     const L = LIB.lists[d.id]; if (!L) return; const seen = new Set();
     cands.forEach(c => (L.bgIdx.get(c) || []).forEach(i => { if (!seen.has(i)) { seen.add(i); out.push({ d, e: L.entries[i] }); } }));
   });
@@ -8408,17 +8514,36 @@ function drawBooks() {
   $('#bookFile').onchange = async e => { const f = e.target.files[0]; if (f) await importFile(f); };
   $('#rbody').querySelectorAll('[data-delbook]').forEach(x => x.onclick = async ev => { ev.stopPropagation(); const b = LIB.books.find(k => k.id === x.dataset.delbook); if (b && confirm('Удалить книгу «' + plain(b.title) + '» с устройства? Слова в «Моём словаре» останутся.')) { await deleteBook(b.id); drawBooks(); } });
 }
+let udQ = '';
 function drawDicts() {
-  let h = '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Подключённые словари</b><div class="small muted">Файл словаря .zip</div></div>' + fileBtn('dictFile', '+ Добавить словарь', '') + '</div>' +
-    '<p class="small muted" style="margin:10px 0 0">Подключённые словари используются при нажатии на слово в книге и в поиске на вкладке «Словарь». Хранятся только на этом устройстве.</p></div>';
-  h += '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Словарь курса</b><div class="small muted">Встроенный · ' + DICT.length + ' статей с ударениями и всеми формами</div></div><button class="btn ghost" data-go="#/dict">Открыть</button></div></div>';
+  const mine = live().filter(e => e.uid && !e.bulk), adds = live().reduce((n, e) => n + (e.add || []).length, 0);
+  const builtin = DICT.filter(e => !e.uid && !e.del).length;
+  let h = '<div class="card"><b>Свой словарь</b><div class="small muted">Ваши статьи: ' + mine.length + ' · ваши дополнения к статьям: ' + live().reduce((n, e) => n + (e.add || []).filter(x => !String(x.uid).startsWith('a') || !x.src || !LIB.dicts.some(d => d.title === x.src)).length, 0) + '</div>' +
+    '<p class="small muted" style="margin:8px 0">Новые слова сразу встают в общий словарь: поиск по любой форме, все формы (лица, времена, артикли, множественное число), карточки.</p>' +
+    '<div class="row"><button class="btn" id="udNew">+ Новое слово</button><button class="btn ghost" id="udList">+ Список слов из книги / учебника</button></div></div>';
+  if (mine.length) {
+    h += '<input class="search" id="udq" type="search" placeholder="Найти среди моих статей" value="' + esc(udQ) + '" autocapitalize="off"><div class="card" style="padding:4px 14px" id="udl"></div>';
+  }
+  h += '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Словарь курса</b><div class="small muted">Встроенный · ' + builtin + ' статей с ударениями и всеми формами</div></div><button class="btn ghost" data-go="#/dict">Открыть</button></div></div>';
+  h += '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Подключённые словари</b><div class="small muted">Файл словаря .zip</div></div>' + fileBtn('dictFile', '+ Добавить', '') + '</div>' +
+    '<p class="small muted" style="margin:10px 0 0">Словари-списки вписываются в общий словарь: новые слова становятся статьями, известные получают дополнительные значения с пометкой источника. Хранятся только на этом устройстве.</p></div>';
   LIB.dicts.forEach(d => {
-    h += '<div class="card"><div class="row" style="justify-content:space-between;align-items:flex-start"><div style="flex:1;min-width:0"><b>' + esc(d.title) + '</b><div class="small muted">' + (d.kind === 'pages' ? 'Отсканированный словарь · ' + d.count + ' страниц · поиск по алфавиту' : d.count + ' статей') + '</div>' + (d.note ? '<div class="small muted" style="margin-top:4px">' + esc(d.note) + '</div>' : '') + '</div><button class="chip" data-deldict="' + d.id + '">✕</button></div>' +
-      '<div class="row" style="margin-top:10px">' + (d.kind === 'pages' ? '<button class="btn ghost" data-go="#/dpage/' + d.id + '/' + Math.max(0, d.keys.findIndex(k => k)) + '">Листать</button>' : '<button class="btn ghost" data-go="#/dict">Искать на вкладке «Словарь»</button>') + '</div></div>';
+    h += '<div class="card"><div class="row" style="justify-content:space-between;align-items:flex-start"><div style="flex:1;min-width:0"><b>' + esc(d.title) + '</b><div class="small muted">' + (d.kind === 'pages' ? 'Отсканированный словарь · ' + d.count + ' страниц · поиск по алфавиту' : d.count + ' статей' + (d.integrated ? ' · ✓ вписан в общий словарь: новых статей ' + (d.nNew || 0) + ', значений ' + (d.nAdd || 0) : '')) + '</div>' + (d.note ? '<div class="small muted" style="margin-top:4px">' + esc(d.note) + '</div>' : '') + '</div><button class="chip" data-deldict="' + d.id + '">✕</button></div>' +
+      '<div class="row" style="margin-top:10px">' + (d.kind === 'pages' ? '<button class="btn ghost" data-go="#/dpage/' + d.id + '/' + Math.max(0, d.keys.findIndex(k => k)) + '">Листать</button>' : (d.integrated ? '<button class="btn ghost" data-go="#/dict">Искать на вкладке «Словарь»</button>' : '<button class="btn" data-integ="' + d.id + '">Вписать в общий словарь</button>')) + '</div></div>';
   });
   $('#rbody').innerHTML = h;
+  $('#udNew').onclick = () => openEditor(null);
+  $('#udList').onclick = () => openListImport();
+  const fillU = () => {
+    const q = norm(udQ); const l = $('#udl'); if (!l) return;
+    const res = mine.filter(e => !q || norm(e.bg + ' ' + e.ru + ' ' + (e.src || '')).includes(q)).sort((x, y) => norm(x.bg).localeCompare(norm(y.bg), 'bg'));
+    l.innerHTML = res.slice(0, 200).map(e => '<div class="entry" data-ue="' + e.id + '"><div><span class="h">' + st(e.bg) + '</span><span class="p">' + esc(shortPos(e)) + '</span>' + (e.src ? '<div class="small muted">' + esc(e.src) + '</div>' : '') + '</div><div class="r">' + esc(e.ru) + '</div></div>').join('') || '<p class="muted">Ничего не найдено</p>';
+    l.querySelectorAll('[data-ue]').forEach(r => r.onclick = () => openEntry(DICT[+r.dataset.ue]));
+  };
+  const uq = $('#udq'); if (uq) { uq.oninput = () => { udQ = uq.value; fillU(); }; fillU(); }
   $('#dictFile').onchange = async e => { const f = e.target.files[0]; if (f) await importFile(f); };
-  $('#rbody').querySelectorAll('[data-deldict]').forEach(x => x.onclick = async () => { const d = LIB.dicts.find(k => k.id === x.dataset.deldict); if (d && confirm('Удалить словарь «' + d.title + '» с устройства?')) { showBusy('Удаляю…'); await deleteDict(d.id); hideBusy(); drawDicts(); } });
+  $('#rbody').querySelectorAll('[data-integ]').forEach(x => x.onclick = async () => { const d = LIB.dicts.find(k => k.id === x.dataset.integ); if (d) { await integrateList(d); drawDicts(); } });
+  $('#rbody').querySelectorAll('[data-deldict]').forEach(x => x.onclick = async () => { const d = LIB.dicts.find(k => k.id === x.dataset.deldict); if (d && confirm('Удалить словарь «' + d.title + '» с устройства? Его статьи тоже будут удалены из общего словаря.')) { showBusy('Удаляю…'); await deleteDict(d.id); hideBusy(); drawDicts(); } });
 }
 function drawMy() {
   const books = [...new Set(LIB.words.map(w => w.book))].map(id => ({ id, title: (LIB.words.find(w => w.book === id) || {}).bookTitle || 'Другое' }));
@@ -8458,10 +8583,12 @@ function editMyWord(w) {
   h += '<label class="fl">Перевод<input class="search" id="ewT" value="' + esc(w.tr || '') + '" autocapitalize="off"></label>';
   h += '<label class="fl">Пример / контекст<textarea class="tin" id="ewC" rows="3">' + esc(w.ctx || '') + '</textarea></label>';
   const found = !isNew ? lookup(w.lemma || w.w).concat(lookup(w.w)) : [];
-  if (found.length) h += '<p class="small">В словаре курса: ' + [...new Set(found)].slice(0, 3).map(e => '<b class="wordlink" data-e2="' + e.id + '">' + st(e.bg) + '</b> — ' + esc(e.ru)).join('; ') + '</p>';
+  if (!isNew) h += '<button class="btn ghost" id="ewDict" style="margin:6px 0">' + (found.length ? 'Все формы в словаре ›' : '+ Статья в словаре (ударение, вид, формы)') + '</button>';
+  if (found.length) h += '<p class="small">В словаре: ' + [...new Set(found)].slice(0, 3).map(e => '<b class="wordlink" data-e2="' + e.id + '">' + st(e.bg) + '</b> — ' + esc(e.ru)).join('; ') + '</p>';
   h += '<div class="row" style="margin-top:12px"><button class="btn" id="ewSave">Сохранить</button>' + (isNew ? '' : '<button class="btn ghost" id="ewCard">' + (srs['my|' + w.id] ? '✓ В карточках' : '+ В карточки') + '</button><button class="btn red" id="ewDel">Удалить</button>') + '</div>';
   $('#sheetBody').innerHTML = h; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); $('#sheet').scrollTop = 0;
   $('#sheetBody').querySelectorAll('[data-e2]').forEach(x => x.onclick = () => openEntry(DICT[+x.dataset.e2]));
+  const ewD = $('#ewDict'); if (ewD) ewD.onclick = () => { if (found.length) openEntry(found[0]); else openEditor(null, { bg: stressIn(w.lemma || w.w), ru: w.tr || '', src: w.bookTitle || '', ex: w.ctx ? [[w.ctx, '']] : [] }); };
   $('#ewSave').onclick = async () => {
     const L = $('#ewL').value.trim(); if (!L) { $('#ewL').focus(); return; }
     w.lemma = L; if (!w.w) w.w = L; w.tr = $('#ewT').value.trim(); w.ctx = $('#ewC').value.trim();
@@ -8575,26 +8702,32 @@ function openWordSheet(word, sent, meta) {
   const lc = lemma ? [norm(lemma)].concat(cands) : cands;
   const lst = listLookup(lc);
   let h = '<div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="big">' + st(word) + '</div>' + (lemma && norm(lemma) !== norm(word) ? '<div class="muted small">словарная форма: <b>' + st(lemma) + '</b></div>' : '') + '</div>' + sayBtn(word) + '</div>';
-  if (ents.length) h += '<div class="card" style="padding:4px 12px;margin-top:10px">' + ents.map(e => '<div class="entry" data-e3="' + e.id + '"><div><span class="h">' + st(e.bg) + '</span><span class="p">' + esc(shortPos(e)) + '</span></div><div class="r">' + esc(e.ru) + ' ›</div></div>').join('') + '</div>';
+  if (ents.length) h += '<div class="card" style="padding:4px 12px;margin-top:10px">' + ents.map(e => { const mf = miniForms(e); return '<div class="entry" data-e3="' + e.id + '" style="flex-direction:column;gap:2px"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><span class="h">' + st(e.bg) + '</span><span class="p">' + esc(shortPos(e)) + '</span></div><div class="r">' + esc(e.ru) + '</div></div>' + (mf ? '<div class="small mf">' + mf + '</div>' : '') + '<div class="small" style="color:var(--accent)">Все формы ›</div></div>'; }).join('') + '</div>';
   if (lst.length) h += '<div class="small muted" style="margin-top:10px">' + esc(lst[0].d.title) + '</div><div class="card" style="padding:4px 12px">' + lst.slice(0, 6).map(x => '<div class="entry"><div>' + esc(x.e[0]) + '</div><div class="r" style="color:var(--ink)">' + esc(x.e[1]) + '</div></div>').join('') + '</div>';
   LIB.dicts.filter(d => d.kind === 'pages').forEach(d => { const pg = pageFind(d, lemma || cands[cands.length > 1 ? 1 : 0]); if (pg >= 0) h += '<button class="btn ghost" style="margin-top:8px" data-go="#/dpage/' + d.id + '/' + pg + '">📕 ' + esc(d.title) + ' — стр. ' + (pg + 1) + ' ›</button> '; });
   if (!ents.length && !lst.length) h += '<p class="muted small" style="margin-top:10px">Слова нет в словарях на устройстве. Впишите перевод сами или посмотрите онлайн-перевод.</p>';
+  if (!ents.length) h += '<button class="btn ghost" id="awEd" style="margin-top:8px">+ Создать статью в словаре (ударение, вид, формы)</button>';
   if (sent) h += '<div class="ctx"><div class="row" style="flex-wrap:nowrap;align-items:flex-start">' + sayBtnInline(sent) + '<div>' + tidy(sent).split(WORD_RE).map(p => norm(p) === norm(word) ? '<b>' + st(p) + '</b>' : st(p)).join('') + '</div></div>' +
     '<div class="row small" style="margin-top:6px"><a target="_blank" rel="noopener" href="https://translate.google.com/?sl=bg&tl=ru&op=translate&text=' + encodeURIComponent(plain(sent)) + '">Перевести предложение онлайн ↗</a></div></div>';
   const ex = LIB.words.find(w => norm(w.lemma || w.w) === norm(lemma || word) || norm(w.w) === norm(word));
   const tr0 = ex ? ex.tr : ents[0] ? ents[0].ru : lst[0] ? lst[0].e[0] : '';
   h += '<h3>' + (ex ? '✓ Уже в моём словаре' : 'В мой словарь') + '</h3>';
-  h += '<label class="fl">Слово<input class="search" id="awL" value="' + esc(ex ? ex.lemma : (lemma || word)) + '" lang="bg" autocapitalize="off"></label>';
+  h += '<label class="fl">Слово' + (ents.length ? '' : ' — словарная форма: у глагола 1-е лицо «аз …», у существительного без артикля') + '<input class="search" id="awL" value="' + esc(ex ? ex.lemma : (lemma || guessLemma(word))) + '" lang="bg" autocapitalize="off"></label>';
   h += '<label class="fl">Перевод<input class="search" id="awT" value="' + esc(tr0) + '" autocapitalize="off" placeholder="впишите перевод"></label>';
-  h += '<label class="row small" style="gap:6px;margin:4px 0 10px"><input type="checkbox" id="awC" checked> добавить в карточки для повторения</label>';
+  h += '<label class="row small" style="gap:6px;margin:4px 0 4px"><input type="checkbox" id="awC" checked> добавить в карточки для повторения</label>';
+  if (!ents.length) h += '<label class="row small" style="gap:6px;margin:0 0 10px"><input type="checkbox" id="awD" checked> вписать в общий словарь (формы построятся по правилам, их можно уточнить)</label>';
   h += '<button class="btn" id="awSave">' + (ex ? 'Обновить' : '+ В мой словарь') + '</button>';
   $('#sheetBody').innerHTML = h; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); $('#sheet').scrollTop = 0;
   if (S.autoSay) say(word);
   $('#sheetBody').querySelectorAll('[data-e3]').forEach(x => x.onclick = () => openEntry(DICT[+x.dataset.e3], word));
+  const srcName = meta ? (String(meta.id).startsWith('text-') ? plain(meta.title) : 'Книга «' + plain(meta.title) + '»') : '';
+  const awEd = $('#awEd'); if (awEd) awEd.onclick = () => openEditor(null, { bg: stressIn($('#awL').value) || word, ru: $('#awT').value.trim(), src: srcName, ex: sent ? [[sent, '']] : [] });
   $('#awSave').onclick = async () => {
     const w = ex || { id: 'w' + Date.now().toString(36), t: Date.now() };
     w.w = word; w.lemma = $('#awL').value.trim() || word; w.tr = $('#awT').value.trim(); w.ctx = sent || w.ctx || ''; w.book = meta ? meta.id : 'manual'; w.bookTitle = meta ? plain(meta.title) : '';
     await saveWord(w);
+    const awD = $('#awD');
+    if (awD && awD.checked && w.tr && !lookup(w.lemma).length) { const bg = stressIn(w.lemma); const pos = guessPos(bg); const g = guessG(bg, pos); await saveU({ id: 'u' + Date.now().toString(36), bg, pos, ru: w.tr, g, ex: sent ? [[sent, '']] : [], src: srcName }); }
     if ($('#awC').checked && !srs['my|' + w.id]) { srs['my|' + w.id] = { b: 0, d: 0 }; store.set('srs', srs); }
     closeSheet(); toast(ex ? 'Обновлено' : 'Добавлено в мой словарь');
     view.querySelectorAll('.reader .w').forEach(x => { if (norm(x.textContent) === norm(word)) x.classList.add('my'); });
@@ -8632,7 +8765,7 @@ function extDictHtml(q) {
   if (!LIB.ready || !LIB.dicts.length) return '';
   const nq = norm(q); if (!nq || nq.length < 2) return '<div class="small muted" style="margin:10px 2px">Подключено: ' + LIB.dicts.map(d => esc(d.title)).join(', ') + ' · <a href="#/read/dicts">управление</a></div>';
   let h = '';
-  LIB.dicts.filter(d => d.kind === 'list').forEach(d => {
+  LIB.dicts.filter(d => d.kind === 'list' && !d.integrated).forEach(d => {
     const L = LIB.lists[d.id]; if (!L) return;
     const res = [];
     L.entries.forEach(e => { const r = norm(e[0]), b = norm(plain(e[1])); let s = 0; if (r === nq || b === nq) s = 10; else if (r.startsWith(nq) || b.split(/[ ,;]+/).includes(nq)) s = 6; else if (r.includes(nq) || b.includes(nq)) s = 2; if (s) res.push([s, e]); });
@@ -8652,6 +8785,325 @@ document.addEventListener('click', ev => {
   const r = lookup(x.dataset.xw); if (r.length) openEntry(r[0], x.dataset.xw); else openWordSheet(x.dataset.xw, '', null);
 });
 const libReady = loadLib();
+
+/* ================= СВОЙ СЛОВАРЬ: новые статьи, значения, источники ================= */
+const live = () => DICT.filter(e => !e.del);
+const KEYMAP = new Map(); DICT.forEach(e => { if (!KEYMAP.has(e.key)) KEYMAP.set(e.key, e); });
+const MARKPOS = { 'м': 'м', 'ж': 'ж', 'с': 'ср', 'ср': 'ср', 'п': 'пр', 'прил': 'пр', 'г': 'гл', 'гл': 'гл', 'мн': 'мн', 'нар': 'нар' };
+/* ввод ударения: апостроф (чета') или заглавная гласная внутри слова (четА) */
+function stressIn(s) {
+  s = String(s || '').trim().replace(/[’'`´]/g, ACC);
+  s = s.replace(/[А-Яа-яЍѝ́-]+/g, w => /[а-я]/.test(w) ? w.replace(/(?!^)([АЕИОУЪЮЯ])/g, (m, v) => v.toLowerCase() + ACC) : w);
+  s = s.replace(new RegExp('([^' + VOW + '])' + ACC, 'g'), '$1').replace(new RegExp(ACC + '+', 'g'), ACC);
+  return s;
+}
+function guessPos(bg) {
+  const [b, r] = splitRefl(bg); const p = plain(b).toLowerCase();
+  if (r) return 'гл';
+  if (/\s/.test(p)) return 'фр';
+  if (/[ая]м$/.test(p) && p.length > 3) return 'гл';
+  if (/(ски|ен|ов|ев|ин|ащ|ящ|ен)$/.test(p) && p.length > 4 && /ски$/.test(p)) return 'пр';
+  if (/[ая]$/.test(p)) return 'ж';
+  if (/[оеиу]$/.test(p)) return 'ср';
+  return 'м';
+}
+function putSt(r, w) { // перенос ударения из w в производную форму r
+  const i = w.indexOf(ACC); if (i < 0) return r;
+  const pre = plain(w.slice(0, i)).toLowerCase();
+  if (i === w.length - 1 && /[аеиоуъюя]$/.test(r)) return r + ACC;
+  if (r.startsWith(pre) && pre.length < r.length) return r.slice(0, pre.length) + ACC + r.slice(pre.length);
+  return r;
+}
+function guessPlural(w, pos) {
+  const p = plain(w).toLowerCase(); let r = null, mono = false;
+  if (pos === 'ж') r = /[ая]$/.test(p) ? p.slice(0, -1) + 'и' : p + 'и';
+  else if (pos === 'ср') r = /(че|ле|не|ще|те)$/.test(p) && vowelsCount(p) > 1 ? p + 'та' : /о$/.test(p) ? p.slice(0, -1) + 'а' : /е$/.test(p) ? p.slice(0, -1) + 'я' : /[иу]$/.test(p) ? p + 'та' : null;
+  else if (pos === 'м') {
+    if (/[ая]$/.test(p)) r = p.slice(0, -1) + 'и';
+    else if (/[ое]$/.test(p)) r = p + 'вци';
+    else if (/нин$/.test(p)) r = p.slice(0, -2) + 'и';
+    else if (vowelsCount(p) === 1) { mono = true; r = /й$/.test(p) ? p.slice(0, -1) + 'еве' : p + 'ове'; }
+    else r = p.replace(/ец$/, 'ц').replace(/к$/, 'ц').replace(/г$/, 'з').replace(/х$/, 'с') + 'и';
+  }
+  if (!r) return null;
+  return mono ? r : putSt(r, w);
+}
+function guessVerb(bg) {
+  const [b] = splitRefl(bg); const p = plain(b).toLowerCase(); const g = {};
+  if (/[ая]м$/.test(p)) { g.cl = '3'; return g; }
+  if (/[^аеиоуъюя]я$/.test(p) || /оя$/.test(p)) g.cl = '2'; else g.cl = '1';
+  const end = b.endsWith(ACC);
+  let a;
+  if (g.cl === '2') { const s = b.replace(/[яа]́?$/, ''); a = /оя$/.test(p) ? s + 'я' + (end ? ACC : '') + 'х' : s + (end ? 'и' + ACC : 'и') + 'х'; }
+  else if (/на$/.test(p)) a = p.slice(0, -1) + 'ах';
+  else if (/жа$/.test(p)) a = p.slice(0, -2) + 'зах';
+  else if (/ша$/.test(p)) a = p.slice(0, -2) + 'сах';
+  else if (/ча$/.test(p)) a = p.slice(0, -2) + 'ках';
+  else if (/[тдсзкг]а$/.test(p)) a = p.slice(0, -1) + 'ох';
+  else if (/ея$/.test(p)) a = p.slice(0, -2) + 'ях';
+  else if (/[аеиоуъю]я$/.test(p)) a = p.slice(0, -1) + 'х';
+  else a = p.slice(0, -1) + 'ах';
+  g['аор'] = a; g.auto = '1';
+  return g;
+}
+function guessLemma(w) {
+  const p = norm(w);
+  if (/[ая]ш$/.test(p) && p.length > 4) return p.slice(0, -1) + 'м';
+  if (/[ая]ме$/.test(p) && p.length > 5) return p.slice(0, -2) + 'м';
+  if (/[ая]хме$|[ая]хте$/.test(p) && p.length > 6) return p.slice(0, -3) + 'м';
+  if (/[^аеиоуъюя](ът|ят)$/.test(p) && p.length > 4) return p.slice(0, -2);
+  if (/[аеоу]ят$/.test(p) && p.length > 4) return p.slice(0, -2) + 'й';
+  if (/[ая]та$/.test(p) && p.length > 4) return p.slice(0, -2);
+  if (/[оеиу]то$/.test(p) && p.length > 4) return p.slice(0, -2);
+  return p;
+}
+function guessG(bg, pos) { return pos === 'гл' ? guessVerb(bg) : {}; }
+
+function applyU(u) {
+  if (u.base) {
+    const e = KEYMAP.get(u.base); if (!e) return;
+    e.add = (e.add || []).filter(a => a.uid !== u.id).concat([{ uid: u.id, ru: u.ru || '', ex: u.ex || [], src: u.src || '' }]);
+    return;
+  }
+  const old = DICT.find(x => x.uid === u.id && !x.del); if (old) old.del = true;
+  if (u.replaces) { const b = KEYMAP.get(u.replaces); if (b && !b.uid) b.del = true; }
+  const e = { bg: u.bg, pos: u.pos, ru: u.ru || '', g: Object.assign({}, u.g || {}), ex: u.ex || [], src: u.src || '', uid: u.id, bulk: !!u.bulk, replaces: u.replaces || '' };
+  e.id = DICT.length; e.key = 'u|' + u.id; DICT.push(e); KEYMAP.set(e.key, e); indexEntry(e);
+  if (old && old.add) e.add = old.add;
+}
+async function saveU(u) { u.t = u.t || Date.now(); await dbPut('uentries', u); applyU(u); return KEYMAP.get(u.base ? u.base : 'u|' + u.id); }
+async function delUentry(id) {
+  const u = await dbGet('uentries', id); await dbDel('uentries', id);
+  if (!u) return;
+  if (u.base) { const e = KEYMAP.get(u.base); if (e && e.add) e.add = e.add.filter(a => a.uid !== id); }
+  else { const e = DICT.find(x => x.uid === id && !x.del); if (e) e.del = true; if (u.replaces) { const b = KEYMAP.get(u.replaces); if (b) b.del = false; } }
+}
+async function bulkU(rows, msg) {
+  const d = await idbOpen();
+  for (let i = 0; i < rows.length; i += 500) {
+    if (msg) showBusy(msg + ': ' + i + ' из ' + rows.length);
+    const chunk = rows.slice(i, i + 500);
+    await new Promise((res, rej) => { const tx = d.transaction('uentries', 'readwrite'); const os = tx.objectStore('uentries'); chunk.forEach(r => os.put(r)); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+    chunk.filter(r => !r.base).forEach(applyU); chunk.filter(r => r.base).forEach(applyU);
+  }
+}
+/* слово из источника → новая статья или дополнительное значение к существующей */
+function planRows(items, src, srcId, bulk) {
+  // items: [{bg, ru, pos?}]
+  const rows = [], newMap = new Map(); let nNew = 0, nAdd = 0, n = 0;
+  const NB = new Map(); live().forEach(e => { const k = norm(e.bg); if (!NB.has(k)) NB.set(k, []); NB.get(k).push(e); });
+  items.forEach(it => {
+    const bg = stressIn(it.bg).replace(/\s+/g, ' ').trim(); const ru = String(it.ru || '').trim(); if (!bg || !ru) return;
+    const pos = it.pos || guessPos(bg);
+    let ex = (NB.get(norm(bg)) || []).filter(e => e.pos === pos || !it.pos || (['м', 'ж', 'ср', 'мн'].includes(e.pos) && ['м', 'ж', 'ср', 'мн'].includes(pos)));
+    if (!ex.length && !/\s/.test(splitRefl(bg)[0])) ex = lookup(bg).filter(e => !it.pos || e.pos === it.pos || (['м', 'ж', 'ср', 'мн'].includes(e.pos) && ['м', 'ж', 'ср', 'мн'].includes(it.pos)));
+    if (ex.length) {
+      const e = ex[0]; if (norm(e.ru).includes(norm(ru)) || (e.add || []).some(a => norm(a.ru) === norm(ru))) return;
+      rows.push({ id: 'a' + Date.now().toString(36) + (n++), base: e.key, ru, src, srcId, bulk, t: Date.now() }); nAdd++;
+    } else {
+      const k = norm(bg) + '|' + pos;
+      if (newMap.has(k)) { const r = newMap.get(k); if (!norm(r.ru).split(/; /).includes(norm(ru))) r.ru += '; ' + ru; return; }
+      const r = { id: 'u' + Date.now().toString(36) + (n++), bg, pos, ru, g: guessG(bg, pos), src, srcId, bulk, t: Date.now() };
+      newMap.set(k, r); rows.push(r); nNew++;
+    }
+  });
+  return { rows, nNew, nAdd };
+}
+function itemsFromList(entries, dir) { // пакет «Краткий словарь»: [ru, 'кайсия ж.; зарзала ж.']
+  const out = [];
+  entries.forEach(([a, b]) => {
+    const ru = dir === 'bg-ru' ? b : a, bgs = dir === 'bg-ru' ? a : b;
+    String(bgs).replace(/\/[^/]*\//g, '').split(/[;,]/).forEach(part => {
+      part = part.trim(); if (!part) return;
+      const m = part.match(/^(.*?)\s+(мн|ж|м|с|п|г|нар)\.?$/); let w = part, pos = '';
+      if (m) { w = m[1].trim(); pos = MARKPOS[m[2]] || ''; }
+      if (!w || /[a-z0-9]/i.test(w) || w.split(' ').length > 4) return;
+      if (/\s/.test(w) && !/ (се|си)$/.test(w)) pos = 'фр';
+      out.push({ bg: w, ru: ru.replace(/\s*\/.*?\/\s*/g, ' ').trim(), pos });
+    });
+  });
+  return out;
+}
+async function integrateList(d) {
+  const L = await loadList(d.id); if (!L) return;
+  showBusy('Вписываю «' + d.title + '» в словарь…');
+  const plan = planRows(itemsFromList(L.entries, d.dir || 'ru-bg'), d.title, d.id, true);
+  await bulkU(plan.rows, 'Сохраняю статьи');
+  d.integrated = true; d.nNew = plan.nNew; d.nAdd = plan.nAdd; await dbPut('dicts', d);
+  hideBusy(); toast('Добавлено новых статей: ' + plan.nNew + ', значений: ' + plan.nAdd);
+}
+/* разбор списка слов из книги/учебника: «слово — перевод» */
+function parseWordList(text) {
+  const items = [];
+  String(text).replace(/\r/g, '').split('\n').forEach(line => {
+    line = line.trim(); if (!line || line.startsWith('#')) return;
+    const m = line.match(/^(.+?)\s*(?:\t| — | – | - |=|;|:)\s*(.+)$/); if (!m) return;
+    let a = m[1].trim(), b = m[2].trim();
+    const isBg = s => /[ъѝ]/.test(s) || lookup(s.split(/[ ,(]/)[0]).length > 0;
+    if (!isBg(a) && isBg(b)) [a, b] = [b, a];
+    let pos = '';
+    const pm = a.match(/^(.*?)\s*[(,]?\s*(мн|ж|м|ср|с|п|прил|г|гл|нар)\.?\)?$/);
+    if (pm && pm[1]) { a = pm[1].trim(); pos = MARKPOS[pm[2]] || ''; }
+    items.push({ bg: a, ru: b, pos });
+  });
+  return items;
+}
+
+/* ---------- добавить значение / пример к статье ---------- */
+function openAddMeaning(e) {
+  let h = '<div class="muted small">Дополнение к статье</div><div class="big">' + st(e.bg) + '</div><div class="muted">' + esc(e.ru) + '</div>';
+  h += '<label class="fl">Новое значение (перевод)<input class="search" id="amR" placeholder="например: соответствовать"></label>';
+  h += '<label class="fl">Пример по-болгарски<input class="search" id="amB" lang="bg" autocapitalize="sentences" placeholder="ударение: апостроф после гласной — чета\'"></label>';
+  h += '<label class="fl">Перевод примера<input class="search" id="amT"></label>';
+  h += '<label class="fl">Источник<input class="search" id="amS" placeholder="книга, учебник, урок…" value="' + esc(store.get('lastSrc', '')) + '"></label>';
+  h += '<button class="btn" id="amSave">Сохранить</button>';
+  $('#sheetBody').innerHTML = h; $('#sheet').scrollTop = 0;
+  $('#amSave').onclick = async () => {
+    const ru = $('#amR').value.trim(), b = stressIn($('#amB').value), t = $('#amT').value.trim(), src = $('#amS').value.trim();
+    if (!ru && !b) { $('#amR').focus(); return; }
+    store.set('lastSrc', src);
+    const target = await saveU({ id: 'a' + Date.now().toString(36), base: e.key, ru, ex: b ? [[b, t]] : [], src });
+    toast('Сохранено'); openEntry(target || e);
+  };
+}
+
+/* ---------- редактор статьи: ударение, часть речи, вид, спряжение, формы ---------- */
+const POSCH = [['м', 'Сущ. м. р.'], ['ж', 'Сущ. ж. р.'], ['ср', 'Сущ. ср. р.'], ['мн', 'Только мн. ч.'], ['пр', 'Прилаг.'], ['гл', 'Глагол'], ['нар', 'Наречие'], ['мест', 'Местоим.'], ['числ', 'Числит.'], ['предл', 'Предлог'], ['съюз', 'Союз'], ['част', 'Частица'], ['межд', 'Междом.'], ['фр', 'Выражение']];
+function openEditor(e, preset) {
+  const isU = !!(e && e.uid);
+  const E = e ? { bg: e.bg, pos: e.pos, ru: e.ru, g: Object.assign({}, e.g), ex: (e.ex || []).slice(), src: e.src || '' } : Object.assign({ bg: '', pos: '', ru: '', g: {}, ex: [], src: store.get('lastSrc', '') }, preset || {});
+  if (!E.pos && E.bg) E.pos = guessPos(E.bg);
+  if (E.pos === 'гл' && !E.g.cl && E.bg) Object.assign(E.g, guessVerb(E.bg));
+  delete E.g.auto;
+  const [b0, r0] = splitRefl(E.bg); let refl = r0.trim();
+  let h = '<div class="muted small">' + (e ? (isU ? 'Редактирование статьи' : 'Уточнение статьи словаря курса (будет сохранена ваша версия)') : 'Новая статья') + '</div>';
+  h += '<label class="fl">Слово (словарная форма; у глагола — 1 л. ед. ч.: чета́, отгова́рям)<input class="search" id="edW" lang="bg" autocapitalize="off" autocomplete="off" value="' + esc(b0) + '"></label>';
+  h += '<div class="small muted">Ударение: нажмите на ударную гласную ниже — или введите апостроф после неё (<b>чета\'</b>), или большую букву (<b>четА</b>).</div><div id="edV" class="vpick"></div>';
+  h += '<div class="small muted" style="margin-top:8px">Часть речи</div><div class="chips" id="edP">' + POSCH.map(([k, n]) => '<button class="chip" data-p="' + k + '">' + n + '</button>').join('') + '</div>';
+  h += '<label class="fl">Перевод (несколько значений — через «;»)<input class="search" id="edR" value="' + esc(E.ru) + '"></label>';
+  h += '<div id="edG"></div>';
+  h += '<label class="fl">Примеры (каждый с новой строки: болгарский = русский)<textarea class="tin" id="edX" rows="3">' + esc(E.ex.map(x => x[0] + (x[1] ? ' = ' + x[1] : '')).join('\n')) + '</textarea></label>';
+  h += '<label class="fl">Источник<input class="search" id="edS" value="' + esc(E.src) + '" placeholder="книга, учебник, урок…"></label>';
+  h += '<div class="part-h">Предпросмотр форм</div><div id="edPrev"></div>';
+  h += '<div class="row" style="margin-top:14px"><button class="btn" id="edSave">Сохранить</button>' + (isU ? '<button class="btn red" id="edDel">Удалить статью</button>' : '') + '</div>';
+  $('#sheetBody').innerHTML = h; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); $('#sheet').scrollTop = 0;
+  const W = $('#edW');
+  const val = id => { const x = $(id); return x ? x.value.trim() : ''; };
+  const drawV = () => {
+    const w = W.value; let k = -1;
+    $('#edV').innerHTML = [...w].map((c, i) => {
+      if (c === ACC) return ''; const stressed = w[i + 1] === ACC;
+      return VOW.includes(c) ? '<button class="vb' + (stressed ? ' on' : '') + '" data-i="' + i + '">' + esc(c) + '</button>' : '<span class="vc">' + esc(c) + '</span>';
+    }).join('');
+    $('#edV').querySelectorAll('[data-i]').forEach(bt => bt.onclick = () => { const i = +bt.dataset.i; const p = W.value.replace(/́/g, ''); let j = 0, cnt = 0; for (; j < W.value.length; j++) { if (W.value[j] === ACC) continue; if (j === i) break; cnt++; } W.value = p.slice(0, cnt + 1) + ACC + p.slice(cnt + 1); drawV(); upd(); });
+  };
+  const gHtml = () => {
+    const p = E.pos, w = stressIn(W.value);
+    if (['м', 'ж', 'ср'].includes(p)) {
+      const gp = guessPlural(w, p) || '';
+      return '<label class="fl">Множественное число<input class="search" id="edPl" lang="bg" value="' + esc(E.g['мн'] || '') + '" placeholder="' + esc(plain(gp) ? 'по правилу: ' + gp : '') + '"></label>' +
+        (p === 'м' ? '<label class="fl">Счётная форма (два …) — необязательно<input class="search" id="edCnt" lang="bg" value="' + esc(E.g['бр'] || '') + '"></label>' : '') +
+        '<label class="fl">Формы с артиклем — если отличаются от правила (через запятую)<input class="search" id="edDef" lang="bg" value="' + esc(E.g['чл'] || '') + '"></label>';
+    }
+    if (p === 'пр' || p === 'мест' || p === 'числ') {
+      const a = adjForms({ bg: w, g: {} });
+      return '<label class="fl">Формы ж. р., ср. р., мн. ч. (через запятую) — если отличаются от правила<input class="search" id="edF" lang="bg" value="' + esc(E.g['ф'] || '') + '" placeholder="' + esc(a.f + ', ' + a.n + ', ' + a.pl) + '"></label>';
+    }
+    if (p === 'гл') {
+      const gv = guessVerb(w + (refl ? ' ' + refl : ''));
+      const cl = E.g.cl || gv.cl;
+      const ex2 = c => { try { const v = verbForms({ bg: w, g: { cl: c } }); return v.pres[1]; } catch (er) { return ''; } };
+      return '<div class="small muted">Вид</div><div class="chips" id="edA">' + [['нсв', 'несовершенный'], ['св', 'совершенный'], ['дв', 'двувидовой']].map(([k, n]) => '<button class="chip' + (E.g.asp === k ? ' on' : '') + '" data-a="' + k + '">' + n + '</button>').join('') + '</div>' +
+        '<div class="small muted">Возвратный</div><div class="chips" id="edRf">' + [['', 'нет'], ['се', 'се'], ['си', 'си']].map(([k, n]) => '<button class="chip' + (refl === k ? ' on' : '') + '" data-r="' + k + '">' + n + '</button>').join('') + '</div>' +
+        '<div class="small muted">Спряжение — выберите по форме «ти …»</div><div class="chips" id="edC">' + (/[ая]м$/.test(plain(w)) ? [['3', 'III']] : [['1', 'I'], ['2', 'II']]).map(([k, n]) => '<button class="chip' + (cl === k ? ' on' : '') + '" data-c="' + k + '">' + n + ' · ти ' + st(ex2(k)) + '</button>').join('') + '</div>' +
+        '<div class="small muted">I — чета́ / чете́ш, пи́ша / пи́шеш; II — гово́ря / гово́риш, мълча́ / мълчи́ш; III — отгова́рям / отгова́ряш (все глаголы на -ам, -ям)</div>' +
+        (cl !== '3' ? '<label class="fl">Аорист, 1 л. ед. ч. (вчера аз …)<input class="search" id="edAor" lang="bg" value="' + esc(E.g['аор'] || '') + '" placeholder="' + esc(gv['аор'] ? 'по правилу: ' + gv['аор'] : '') + '"></label>' +
+          '<label class="fl">Аорист, 2–3 л. ед. ч. — если особый (той …)<input class="search" id="edAor2" lang="bg" value="' + esc(E.g['аор2'] || '') + '"></label>' : '') +
+        '<label class="fl">Причастие на -л (м/ж/ср/мн через «/») — если особое<input class="search" id="edPr" lang="bg" value="' + esc(E.g['прич'] || '') + '" placeholder="например: дошъ́л/дошла́/дошло́/дошли́"></label>' +
+        '<label class="fl">Видовая пара<input class="search" id="edPara" lang="bg" value="' + esc(E.g['пара'] || '') + '"></label>' +
+        '<label class="small" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="edTr" ' + (E.g['перех'] ? 'checked' : '') + '> переходный (есть страдательное причастие: «прочетен»)</label>';
+    }
+    return '';
+  };
+  const collect = () => {
+    const w = stressIn(W.value); E.bg = w + (E.pos === 'гл' && refl ? ' ' + refl : ''); E.ru = val('#edR');
+    const g = {};
+    ['asp', 'тема', 'прим', 'пр'].forEach(k => { if (E.g[k]) g[k] = E.g[k]; });
+    const set = (k, id, f) => { const v = val(id); if (v) g[k] = f ? f(v) : v; };
+    if (['м', 'ж', 'ср'].includes(E.pos)) { set('мн', '#edPl', stressIn); set('бр', '#edCnt', stressIn); set('чл', '#edDef', stressIn); }
+    if (['пр', 'мест', 'числ'].includes(E.pos)) set('ф', '#edF', stressIn);
+    if (E.pos === 'гл') {
+      g.cl = E.g.cl || guessVerb(E.bg).cl; if (E.g.asp) g.asp = E.g.asp;
+      set('аор', '#edAor', stressIn); set('аор2', '#edAor2', stressIn); set('прич', '#edPr', stressIn); set('пара', '#edPara', stressIn);
+      if (g.cl !== '3' && !g['аор']) { g['аор'] = guessVerb(E.bg)['аор']; }
+      if ($('#edTr') && $('#edTr').checked) g['перех'] = '1';
+    }
+    E.g = g;
+    E.ex = val('#edX').split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [b, r] = l.split(/\s*=\s*/); return [stressIn(b), (r || '').trim()]; });
+    E.src = val('#edS');
+  };
+  const drawG = () => {
+    $('#edG').innerHTML = gHtml();
+    $('#edP').querySelectorAll('[data-p]').forEach(bt => bt.classList.toggle('on', bt.dataset.p === E.pos));
+    const G = $('#edG');
+    G.querySelectorAll('[data-a]').forEach(bt => bt.onclick = () => { E.g.asp = bt.dataset.a; drawG(); upd(); });
+    G.querySelectorAll('[data-r]').forEach(bt => bt.onclick = () => { refl = bt.dataset.r; drawG(); upd(); });
+    G.querySelectorAll('[data-c]').forEach(bt => bt.onclick = () => { collect(); E.g.cl = bt.dataset.c; if (bt.dataset.c !== '3' && !$('#edAor').value) delete E.g['аор']; drawG(); upd(); });
+    G.querySelectorAll('input').forEach(i => i.oninput = upd);
+  };
+  let tmr = null;
+  const upd = () => { clearTimeout(tmr); tmr = setTimeout(() => {
+    const keepCl = E.g.cl, keepAsp = E.g.asp; collect(); if (keepCl) E.g.cl = keepCl; if (keepAsp) E.g.asp = keepAsp;
+    const t = { bg: E.bg || '—', pos: E.pos, ru: E.ru, g: Object.assign({}, E.g) };
+    let ph = '';
+    try { ph = E.bg ? formsBlock(t) : '<p class="muted small">Введите слово</p>'; } catch (er) { ph = '<p class="muted small">Недостаточно данных для форм</p>'; }
+    $('#edPrev').innerHTML = ph || '<p class="muted small">У этой части речи нет изменяемых форм.</p>';
+    try { bindForms($('#edPrev'), t); } catch (er) {}
+  }, 250); };
+  W.oninput = () => { drawV(); if (!e && !E.posManual) { const p = guessPos(stressIn(W.value)); if (p !== E.pos) { E.pos = p; drawG(); } } upd(); };
+  $('#edP').querySelectorAll('[data-p]').forEach(bt => bt.onclick = () => { collect(); E.pos = bt.dataset.p; E.posManual = true; if (E.pos === 'гл' && !E.g.cl) Object.assign(E.g, guessVerb(E.bg)); delete E.g.auto; drawG(); upd(); });
+  $('#edR').oninput = upd; $('#edX').oninput = upd;
+  drawV(); drawG(); upd();
+  $('#edSave').onclick = async () => {
+    collect();
+    if (!plain(E.bg).trim()) { W.focus(); return; }
+    if (!E.ru) { $('#edR').focus(); toast('Добавьте перевод'); return; }
+    if (vowelsCount(splitRefl(E.bg)[0]) > 1 && !E.bg.includes(ACC) && !confirm('Ударение не отмечено. Сохранить без ударения?')) return;
+    store.set('lastSrc', E.src);
+    const u = { id: isU ? e.uid : 'u' + Date.now().toString(36), bg: E.bg, pos: E.pos || 'фр', ru: E.ru, g: E.g, ex: E.ex, src: E.src, replaces: isU ? (e.replaces || '') : (e ? e.key : '') };
+    const ne = await saveU(u); toast('Статья сохранена'); openEntry(ne);
+    if (location.hash.startsWith('#/read/dicts')) drawDicts(); else if (location.hash.startsWith('#/dict')) { const q = $('#dq'); if (q) fillDict(q.value); }
+  };
+  const dl = $('#edDel'); if (dl) dl.onclick = async () => { if (!confirm('Удалить статью «' + plain(e.bg) + '»?')) return; await delUentry(e.uid); closeSheet(); toast('Удалено'); if (location.hash.startsWith('#/read/dicts')) drawDicts(); };
+}
+/* ---------- импорт списка слов (из книги, учебника, таблицы) ---------- */
+function openListImport() {
+  let h = '<div class="muted small">Источник для словаря</div><div class="big">Список слов</div>';
+  h += '<p class="small muted">Вставьте слова — по одному на строке: <b>болгарское — перевод</b> (подойдут и «=», «;», табуляция). Можно указать часть речи: «кни́га ж — книга», «чета́ гл — читать». Ударение — апострофом после гласной (кни\'га) или большой буквой (книга → кнИга). Новые слова станут статьями словаря со всеми формами, а уже известные получат дополнительное значение.</p>';
+  h += '<label class="fl">Название источника<input class="search" id="liS" placeholder="например: Учебник Ивановой, урок 7" value="' + esc(store.get('lastSrc', '')) + '"></label>';
+  h += '<label class="fl">Слова<textarea class="tin" id="liT" rows="8" placeholder="ябълка ж — яблоко&#10;отгова\'рям — отвечать&#10;хубав — красивый"></textarea></label>';
+  h += '<div class="row">' + fileBtn('liF', 'Из файла TXT / CSV', '.txt,.csv,text/plain,text/csv') + '<button class="btn ghost" id="liP">Проверить</button></div><div id="liR"></div>';
+  $('#sheetBody').innerHTML = h; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); $('#sheet').scrollTop = 0;
+  $('#liF').onchange = async ev => { const f = ev.target.files[0]; if (!f) return; $('#liT').value = decodeText(new Uint8Array(await f.arrayBuffer())); if (!$('#liS').value) $('#liS').value = f.name.replace(/\.[^.]+$/, ''); prev(); };
+  const prev = () => {
+    const items = parseWordList($('#liT').value); const src = $('#liS').value.trim() || 'Мой список';
+    const plan = planRows(items, src, '', false);
+    $('#liR').innerHTML = '<p>Распознано строк: <b>' + items.length + '</b> · новых статей: <b>' + plan.nNew + '</b> · дополнений к существующим: <b>' + plan.nAdd + '</b></p>' +
+      (items.length ? '<div class="tbl"><table><tbody>' + items.slice(0, 12).map(it => { const known = lookup(stressIn(it.bg))[0]; return '<tr><td>' + st(known ? known.bg : stressIn(it.bg)) + '</td><td class="muted small">' + (known ? 'есть в словаре' : 'новое · ' + esc(POS[it.pos || guessPos(stressIn(it.bg))] || '')) + '</td><td>' + esc(it.ru) + '</td></tr>'; }).join('') + '</tbody></table></div>' + (items.length > 12 ? '<p class="small muted">…и ещё ' + (items.length - 12) + '</p>' : '') : '') +
+      (plan.rows.length ? '<button class="btn" id="liGo">Добавить в словарь</button>' : '');
+    const go2 = $('#liGo'); if (go2) go2.onclick = async () => { store.set('lastSrc', src); await bulkU(plan.rows, 'Добавляю'); hideBusy(); closeSheet(); toast('Добавлено: новых ' + plan.nNew + ', дополнений ' + plan.nAdd); if (location.hash.startsWith('#/read/dicts')) drawDicts(); };
+  };
+  $('#liP').onclick = prev;
+}
+/* краткие формы для подсказки при чтении */
+function miniForms(e) {
+  try {
+    if (e.pos === 'гл') { const v = e._v || verbForms(e); return 'наст.: ' + v.pres.slice(0, 3).map(st).join(', ') + '…' + (v.aor ? ' · аорист: ' + st(v.aor[0]) + ', ' + st(v.aor[2]) : '') + ' · буд.: ' + st(withPre('ще', v.pres[0])) + (v.part ? ' · прич.: ' + st(splitRefl(v.part[0])[0]) : ''); }
+    if (['м', 'ж', 'ср'].includes(e.pos)) { const n = e._n || nounForms(e); const pl = n.pl || guessPlural(e.bg, e.pos); return (n.def ? 'с артиклем: ' + n.def.map(st).join(' / ') : '') + (pl ? ' · мн. ч.: ' + (n.pl ? '' : '≈') + st(pl) + (n.pldef ? ', ' + st(n.pldef) : '') : ''); }
+    if (e.pos === 'пр') { const a = e._a || adjForms(e); return st(a.m) + ', ' + st(a.f) + ', ' + st(a.n) + ', ' + st(a.pl) + ' · с артиклем: ' + st(a.mdef[0]) + ', ' + st(a.fdef); }
+  } catch (er) {}
+  return '';
+}
 
 /* ---------- старт ---------- */
 route();
