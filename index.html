@@ -199,6 +199,10 @@ select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background
 .mrow.c-green{border-left:4px solid #3a9a5b;padding-left:8px}.mrow.c-blue{border-left:4px solid #3b6fb6;padding-left:8px}.mrow.c-red{border-left:4px solid #c0474b;padding-left:8px}.mrow.c-gold{border-left:4px solid var(--gold);padding-left:8px}
 .cont{border:1px solid var(--gold);cursor:pointer}
 mark{background:rgba(214,180,106,.5);color:inherit;border-radius:2px}
+details.hlp{padding:0}details.hlp summary{padding:14px 16px;font-weight:650;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+details.hlp summary::after{content:"›";color:var(--accent);transform:rotate(90deg);transition:transform .2s}details.hlp[open] summary::after{transform:rotate(-90deg)}
+details.hlp summary::-webkit-details-marker{display:none}details.hlp .hb{padding:0 16px 14px;line-height:1.55}details.hlp .hb li{margin:4px 0}
+code{background:var(--accent-soft);padding:1px 5px;border-radius:5px;font-size:.95em}.help-card{cursor:pointer;border:1px solid var(--accent)}
 </style>
 </head>
 <body>
@@ -7642,7 +7646,7 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => go('#/'
 function route() {
   const h = location.hash.replace(/^#\/?/, '') || 'course';
   const [p, a, c] = h.split('/');
-  tab = ['course', 'lesson'].includes(p) ? 'course' : (p === 'gr' ? 'grammar' : (['text', 'read', 'book'].includes(p) ? 'texts' : (p === 'dpage' ? 'dict' : p)));
+  tab = ['course', 'lesson'].includes(p) ? 'course' : (p === 'gr' ? 'grammar' : (['text', 'read', 'book'].includes(p) ? 'texts' : (p === 'dpage' ? 'dict' : (p === 'help' ? 'settings' : p))));
   if (p !== 'book') { if (RB) saveBookPos(); window.onscroll = null; document.onselectionchange = null; }
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   closeSheet();
@@ -7652,6 +7656,7 @@ function route() {
   else if (p === 'grammar') renderGrammarList();
   else if (p === 'cards') renderCards();
   else if (p === 'settings') renderSettings();
+  else if (p === 'help') renderHelp();
   else if (p === 'texts') renderRead();
   else if (p === 'read') renderRead(a);
   else if (p === 'book') { renderBook(a); return; }
@@ -7766,27 +7771,30 @@ function posOk(e) {
   if (dictPos === 'проч') return ['мест', 'числ', 'предл', 'съюз', 'част', 'межд'].includes(e.pos);
   return e.pos === dictPos;
 }
+const shortRu = (s, n) => { n = n || 110; s = String(s || ''); return s.length > n ? s.slice(0, n - 2) + '…' : s; };
+const NB = e => e._nb || (e._nb = norm(e.bg)), NR = e => e._nr || (e._nr = norm(e.ru));
+const COLL = new Intl.Collator('bg'), COLLR = new Intl.Collator('ru');
 function fillDict(q) {
   const box = $('#dres'); const nq = norm(q);
   let res;
   if (nq) {
     const exact = new Set(); lookup(q).forEach(e => exact.add(e.id));
-    res = live().filter(e => posOk(e) && (exact.has(e.id) || norm(e.bg).includes(nq) || norm(e.ru).includes(nq)));
-    res.sort((a, b) => score(b, nq, exact) - score(a, nq, exact) || norm(a.bg).localeCompare(norm(b.bg), 'bg'));
+    res = live().filter(e => posOk(e) && (exact.has(e.id) || NB(e).includes(nq) || NR(e).includes(nq)));
+    res.sort((a, b) => score(b, nq, exact) - score(a, nq, exact) || COLL.compare(NB(a), NB(b)));
   } else {
     res = live().filter(posOk);
-    if (dictMode === 'ru') { res = res.slice().sort((a, b) => norm(a.ru).localeCompare(norm(b.ru), 'ru')); if (dictLetter) res = res.filter(e => norm(e.ru).startsWith(dictLetter.toLowerCase())); }
-    else { res = res.slice().sort((a, b) => norm(a.bg).localeCompare(norm(b.bg), 'bg')); if (dictLetter) res = res.filter(e => norm(e.bg).startsWith(dictLetter.toLowerCase())); }
+    if (dictMode === 'ru') { res = res.slice().sort((a, b) => COLLR.compare(NR(a), NR(b))); if (dictLetter) res = res.filter(e => NR(e).startsWith(dictLetter.toLowerCase())); }
+    else { res = res.slice().sort((a, b) => COLL.compare(NB(a), NB(b))); if (dictLetter) res = res.filter(e => NB(e).startsWith(dictLetter.toLowerCase())); }
   }
   const total = res.length; res = res.slice(0, 300);
   box.innerHTML = (res.length ? res.map(e => dictMode === 'ru' && !nq ?
-    '<div class="entry" data-e="' + e.id + '"><div>' + esc(e.ru) + '</div><div class="r"><b style="color:var(--ink)">' + st(e.bg) + '</b></div></div>' :
-    '<div class="entry" data-e="' + e.id + '"><div><span class="h">' + st(e.bg) + '</span><span class="p">' + esc(shortPos(e)) + '</span>' + (e.uid ? '<span class="srcb">' + esc(e.bulk ? 'кратк.' : 'мой') + '</span>' : '') + (e.add && e.add.length ? '<span class="srcb">+' + e.add.length + '</span>' : '') + '</div><div class="r">' + esc(e.ru) + '</div></div>').join('') : '<p class="muted">Ничего не найдено</p>') +
+    '<div class="entry" data-e="' + e.id + '"><div>' + esc(shortRu(e.ru)) + '</div><div class="r"><b style="color:var(--ink)">' + st(e.bg) + '</b></div></div>' :
+    '<div class="entry" data-e="' + e.id + '"><div><span class="h">' + st(e.bg) + '</span><span class="p">' + esc(shortPos(e)) + '</span>' + (e.uid ? '<span class="srcb">' + esc(e.sl || (e.bulk ? 'кратк.' : 'мой')) + '</span>' : '') + (e.add && e.add.length ? '<span class="srcb">+' + e.add.length + '</span>' : '') + '</div><div class="r">' + esc(shortRu(e.ru)) + '</div></div>').join('') : '<p class="muted">Ничего не найдено</p>') +
     (total > 300 ? '<p class="muted small">Показано 300 из ' + total + '. Уточните запрос или выберите букву.</p>' : '<p class="muted small">Найдено: ' + total + '</p>');
   box.querySelectorAll('[data-e]').forEach(r => r.onclick = () => openEntry(DICT[+r.dataset.e]));
   const ext = $('#dext'); if (ext) ext.innerHTML = extDictHtml(q);
 }
-function score(e, q, exact) { const b = norm(e.bg), r = norm(e.ru); let s = 0; if (exact.has(e.id)) s += 5; if (b === q) s += 10; if (b.startsWith(q)) s += 4; if (r.split(/[,;() ]+/).includes(q)) s += 6; if (r.startsWith(q)) s += 3; return s; }
+function score(e, q, exact) { const b = NB(e), r = NR(e); let s = 0; if (exact.has(e.id)) s += 5; if (b === q) s += 10; if (b.startsWith(q)) s += 4; if (r.split(/[,;() ]+/).includes(q)) s += 6; if (r.startsWith(q)) s += 3; return s; }
 function shortPos(e) { const m = { 'м': 'м.', 'ж': 'ж.', 'ср': 'ср.', 'мн': 'мн.', 'пр': 'прил.', 'гл': e.g.asp || 'гл.', 'нар': 'нар.', 'мест': 'мест.', 'числ': 'числ.', 'предл': 'предл.', 'съюз': 'союз', 'част': 'част.', 'межд': 'межд.', 'фр': 'выраж.' }; return m[e.pos] || e.pos; }
 
 /* ----- карточка слова: значения + все словоформы (как в rechnik.chitanka.info) ----- */
@@ -7917,6 +7925,10 @@ function bindForms(box, e) {
   show('now');
   box.querySelectorAll('.vtabs [data-vt]').forEach(b => b.onclick = () => { box.querySelectorAll('.vtabs [data-vt]').forEach(x => x.classList.remove('on')); b.classList.add('on'); show(b.dataset.vt); });
 }
+function pageBtn(dictId, page, small) {
+  const d = LIB.dicts.find(x => x.id === dictId); if (!d) return '';
+  return small ? '<a class="small" href="#/dpage/' + d.id + '/' + page + '">📕 скан, стр. ' + (page + 1) + '</a>' : '<button class="btn ghost" style="margin:6px 0" data-go="#/dpage/' + d.id + '/' + page + '">📕 Оригинал в скане словаря, стр. ' + (page + 1) + ' ›</button>';
+}
 function aspName(a) { return a === 'нсв' ? 'несовершенный вид' : a === 'св' ? 'совершенный вид' : a === 'дв' ? 'двувидовой' : ''; }
 function openEntry(e, form) {
   if (!e) return;
@@ -7924,7 +7936,8 @@ function openEntry(e, form) {
     (e.src ? '<div class="small muted">Источник: ' + esc(e.src) + '</div>' : '') + '</div>' + sayBtn(e.bg) + '</div>';
   if (form && norm(form) !== norm(e.bg)) h += '<div class="tag">форма «' + esc(form) + '»</div>';
   h += '<p style="font-size:1.1em;margin:10px 0">' + esc(e.ru) + '</p>';
-  (e.add || []).forEach(a => { h += '<div class="addm"><div>' + (a.ru ? esc(a.ru) : '') + (a.src ? ' <span class="small muted">· ' + esc(a.src) + '</span>' : '') + '</div>' + (a.ex || []).map(([b, r]) => '<div class="small">' + sayBtnInline(b) + ' ' + st(b) + (r ? ' — <span class="muted">' + esc(r) + '</span>' : '') + '</div>').join('') + (a.uid ? '<button class="chip" data-delm="' + a.uid + '">✕</button>' : '') + '</div>'; });
+  if (e.page != null) h += pageBtn(e.srcId, e.page);
+  (e.add || []).forEach(a => { h += '<div class="addm"><div>' + (a.ru ? esc(a.ru) : '') + (a.src ? ' <span class="small muted">· ' + esc(a.src) + '</span>' : '') + (a.page != null ? ' ' + pageBtn(a.srcId, a.page, true) : '') + '</div>' + (a.ex || []).map(([b, r]) => '<div class="small">' + sayBtnInline(b) + ' ' + st(b) + (r ? ' — <span class="muted">' + esc(r) + '</span>' : '') + '</div>').join('') + (a.uid ? '<button class="chip" data-delm="' + a.uid + '">✕</button>' : '') + '</div>'; });
   if (e.g['пара']) h += '<p>Видовая пара: ' + e.g['пара'].split(',').map(x => '<b class="wordlink" data-find="' + esc(plain(x.trim())) + '">' + st(x.trim()) + '</b>').join(', ') + '</p>';
   if (e.g['прим']) h += '<div class="tip">' + inl(e.g['прим']) + '</div>';
   const exs = (e.g['пр'] ? e.g['пр'].split(' ;; ').map(x => x.split(' = ')) : []).concat(e.ex || []);
@@ -7964,7 +7977,7 @@ function renderGrammarList() {
     const words = norm(vq.value).replace(/^(ще|ня́ма да|няма да|да)\s+/, '').split(/\s+/);
     const r = []; words.forEach(w => lookup(w).filter(e => e.pos === 'гл').forEach(e => { if (!r.includes(e)) r.push(e); }));
     if (!r.length && words[0]) live().filter(e => e.pos === 'гл' && norm(e.bg).startsWith(words[0])).slice(0, 8).forEach(e => r.push(e));
-    $('#vres').innerHTML = r.map(e => '<div class="entry" data-e="' + e.id + '"><span class="h">' + st(e.bg) + '</span><span class="r">' + esc(e.ru) + '</span></div>').join('');
+    $('#vres').innerHTML = r.map(e => '<div class="entry" data-e="' + e.id + '"><span class="h">' + st(e.bg) + '</span><span class="r">' + esc(shortRu(e.ru)) + '</span></div>').join('');
     $('#vres').querySelectorAll('[data-e]').forEach(x => x.onclick = () => openEntry(DICT[+x.dataset.e]));
   };
 }
@@ -8018,7 +8031,7 @@ function renderSettings() {
   setTitle('Настройки', false);
   loadVoices();
   const vopts = voices.length ? voices.map(v => '<option ' + (v.name === S.voice ? 'selected' : '') + '>' + esc(v.name) + '</option>').join('') : '<option value="">нет болгарского голоса</option>';
-  let h = '<div class="card">' +
+  let h = '<div class="card help-card" data-go="#/help"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><b>📖 Инструкция</b><div class="small muted">Подробно обо всех функциях: уроки, словарь и формы слов, книги, закладки, свой словарь, карточки, резервная копия</div></div><span class="big" style="color:var(--accent)">›</span></div></div>' + '<div class="card">' +
     '<div class="set-row"><span>Тема оформления</span><select id="sTheme">' + [['auto', 'Как в системе'], ['light', 'Светлая'], ['dark', 'Тёмная'], ['sepia', 'Сепия'], ['blue', 'Морская']].map(([k, n]) => '<option value="' + k + '" ' + (S.theme === k ? 'selected' : '') + '>' + n + '</option>').join('') + '</select></div>' +
     '<div class="set-row"><span>Размер шрифта: <b id="fsv">' + S.fs + '</b></span><input id="sFs" type="range" min="14" max="26" value="' + S.fs + '"></div>' +
     '<div class="set-row"><span>Ударения</span><select id="sSt"><option value="color" ' + (S.stress === 'color' ? 'selected' : '') + '>Знак + цвет</option><option value="mark" ' + (S.stress === 'mark' ? 'selected' : '') + '>Только знак</option><option value="none" ' + (S.stress === 'none' ? 'selected' : '') + '>Скрыть</option></select></div>' +
@@ -8030,7 +8043,7 @@ function renderSettings() {
     '<p class="small muted">На iPhone болгарский голос включается так: Настройки → Универсальный доступ → Устный контент → Голоса → Болгарский → загрузите голос (например, «Daria»).</p></div>' +
     '<div class="card"><b>Резервная копия</b><p class="small muted">Всё хранится только на этом устройстве. Копию сохраните в «Файлы» или iCloud Drive — из неё всё восстанавливается на этом или другом iPhone/iPad.</p>' +
     '<p class="small"><b>Быстрая копия</b> — прогресс уроков, карточки, «Мои слова», ваши статьи словаря, закладки, заметки и места чтения в книгах (маленький файл).</p>' +
-    '<p class="small"><b>Полная копия</b> — всё то же плюс сами книги и подключённые словари (файл большой: словарь Бернштейна ~26 МБ).</p><p class="small muted" id="stUse"></p>' +
+    '<p class="small"><b>Полная копия</b> — всё то же плюс сами книги и подключённые словари.</p><p class="small muted" id="stUse"></p>' +
     '<div class="row"><button class="btn" id="exp">Быстрая копия</button><button class="btn ghost" id="expF">Полная копия</button><label class="btn ghost" style="display:inline-block">Восстановить из копии<input type="file" id="imp" hidden></label></div><div class="row" style="margin-top:8px"><button class="btn red" id="rst">Сбросить прогресс</button></div></div>' +
     '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Версия приложения: <span id="appVer">…</span></b><div class="small muted">Обновления с GitHub приходят сами при запуске с интернетом</div></div><button class="btn ghost" id="updBtn">Проверить обновление</button></div></div>' +
     '<div class="card small"><b>О приложении</b><p>Курс болгарского языка для русскоговорящих: ' + LESSONS.length + ' уроков, ' + GRAMMAR.length + ' справочных таблиц, словарь — ' + live().length + ' статей с грамматическими формами. Работает без интернета после первой загрузки.</p><p class="muted">© ' + new Date().getFullYear() + ' Elena Kirsanova. Все права защищены. Копирование и распространение без согласия автора запрещено.</p></div>';
@@ -8451,11 +8464,14 @@ async function saveDict(p, z) {
       for (let j = i; j < Math.min(i + 40, p.pages.length); j++) { const pg = p.pages[j]; const data = await z.get(pg.f); chunk.push({ k: id + '/' + j, b: new Blob([data], { type: pg.f.endsWith('.webp') ? 'image/webp' : 'image/png' }) }); }
       await new Promise((res, rej) => { const tx = d.transaction('pages', 'readwrite'); const os = tx.objectStore('pages'); chunk.forEach(c => os.put(c)); tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('Недостаточно места на устройстве')); });
     }
-    if (p.text) await dbPut('dictdata', { id, text: p.text });
+    if (p.text || p.entries) await dbPut('dictdata', { id, text: p.text || [], entries: p.entries || null });
+    if (p.entries) meta.hasEntries = p.entries.length;
   } else throw new Error('Неизвестный тип словаря');
   await dbPut('dicts', meta);
   LIB.dicts = LIB.dicts.filter(x => x.id !== id).concat([meta]);
-  delete LIB.lists[id]; delete LIB.ocr[id]; if (meta.kind === 'list') { await loadList(id); await integrateList(meta); }
+  delete LIB.lists[id]; delete LIB.ocr[id];
+  if (meta.kind === 'list') { await loadList(id); await integrateList(meta); }
+  else if (p.entries) { const old = LIB.dicts.find(x => x.id === id); await removeSrcRows(id); await integrateBern(meta, p.entries); }
   toast('Словарь добавлен'); if (location.hash === '#/read/dicts') route(); else go('#/read/dicts');
 }
 async function deleteBook(id) {
@@ -8468,7 +8484,7 @@ async function deleteDict(id) {
   await dbDel('dictdata', id); await dbDel('dicts', id);
   const us = ((await dbAll('uentries')) || []).filter(u => u.srcId === id);
   if (us.length) { const d = await idbOpen(); await new Promise(res => { const tx = d.transaction('uentries', 'readwrite'); const os = tx.objectStore('uentries'); us.forEach(u => os.delete(u.id)); tx.oncomplete = res; tx.onerror = res; }); }
-  us.forEach(u => { if (u.base) { const e = KEYMAP.get(u.base); if (e && e.add) e.add = e.add.filter(x => x.uid !== u.id); } else { const e = DICT.find(x => x.uid === u.id && !x.del); if (e) e.del = true; } });
+  us.forEach(u => { if (u.base) { const e = KEYMAP.get(u.base); if (e && e.add) e.add = e.add.filter(x => x.uid !== u.id); } else { const e = UIDMAP.get(u.id); if (e) { e.del = true; UIDMAP.delete(u.id); } } });
   LIB.dicts = LIB.dicts.filter(x => x.id !== id); delete LIB.lists[id]; delete LIB.ocr[id];
 }
 
@@ -8551,7 +8567,7 @@ function drawDicts() {
   h += '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Подключённые словари</b><div class="small muted">Файл словаря .zip</div></div>' + fileBtn('dictFile', '+ Добавить', '') + '</div>' +
     '<p class="small muted" style="margin:10px 0 0">Словари-списки вписываются в общий словарь: новые слова становятся статьями, известные получают дополнительные значения с пометкой источника. Хранятся только на этом устройстве.</p></div>';
   LIB.dicts.forEach(d => {
-    h += '<div class="card"><div class="row" style="justify-content:space-between;align-items:flex-start"><div style="flex:1;min-width:0"><b>' + esc(d.title) + '</b><div class="small muted">' + (d.kind === 'pages' ? 'Отсканированный словарь · ' + d.count + ' страниц · поиск по алфавиту' : d.count + ' статей' + (d.integrated ? ' · ✓ вписан в общий словарь: новых статей ' + (d.nNew || 0) + ', значений ' + (d.nAdd || 0) : '')) + '</div>' + (d.note ? '<div class="small muted" style="margin-top:4px">' + esc(d.note) + '</div>' : '') + '</div><button class="chip" data-deldict="' + d.id + '">✕</button></div>' +
+    h += '<div class="card"><div class="row" style="justify-content:space-between;align-items:flex-start"><div style="flex:1;min-width:0"><b>' + esc(d.title) + '</b><div class="small muted">' + (d.kind === 'pages' ? 'Отсканированный словарь · ' + d.count + ' страниц' + (d.integrated ? ' · ✓ вписан в общий словарь: новых статей ' + (d.nNew || 0) + ', значений ' + (d.nAdd || 0) : ' · только просмотр страниц (загрузите новый файл словаря, чтобы слова вошли в общий словарь)') : d.count + ' статей' + (d.integrated ? ' · ✓ вписан в общий словарь: новых статей ' + (d.nNew || 0) + ', значений ' + (d.nAdd || 0) : '')) + '</div>' + (d.note ? '<div class="small muted" style="margin-top:4px">' + esc(d.note) + '</div>' : '') + '</div><button class="chip" data-deldict="' + d.id + '">✕</button></div>' +
       '<div class="row" style="margin-top:10px">' + (d.kind === 'pages' ? '<button class="btn ghost" data-go="#/dpage/' + d.id + '/' + Math.max(0, d.keys.findIndex(k => k)) + '">Листать</button>' : (d.integrated ? '<button class="btn ghost" data-go="#/dict">Искать на вкладке «Словарь»</button>' : '<button class="btn" data-integ="' + d.id + '">Вписать в общий словарь</button>')) + '</div></div>';
   });
   $('#rbody').innerHTML = h;
@@ -8837,7 +8853,7 @@ function openWordSheet(word, sent, meta) {
   const lc = lemma ? [norm(lemma)].concat(cands) : cands;
   const lst = listLookup(lc);
   let h = '<div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="big">' + st(word) + '</div>' + (lemma && norm(lemma) !== norm(word) ? '<div class="muted small">словарная форма: <b>' + st(lemma) + '</b></div>' : '') + '</div>' + sayBtn(word) + '</div>';
-  if (ents.length) h += '<div class="card" style="padding:4px 12px;margin-top:10px">' + ents.map(e => { const mf = miniForms(e); return '<div class="entry" data-e3="' + e.id + '" style="flex-direction:column;gap:2px"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><span class="h">' + st(e.bg) + '</span><span class="p">' + esc(shortPos(e)) + '</span></div><div class="r">' + esc(e.ru) + '</div></div>' + (mf ? '<div class="small mf">' + mf + '</div>' : '') + '<div class="small" style="color:var(--accent)">Все формы ›</div></div>'; }).join('') + '</div>';
+  if (ents.length) h += '<div class="card" style="padding:4px 12px;margin-top:10px">' + ents.map(e => { const mf = miniForms(e); return '<div class="entry" data-e3="' + e.id + '" style="flex-direction:column;gap:2px"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><span class="h">' + st(e.bg) + '</span><span class="p">' + esc(shortPos(e)) + '</span></div><div class="r">' + esc(shortRu(e.ru, 160)) + '</div></div>' + (mf ? '<div class="small mf">' + mf + '</div>' : '') + '<div class="small" style="color:var(--accent)">Все формы ›</div></div>'; }).join('') + '</div>';
   if (lst.length) h += '<div class="small muted" style="margin-top:10px">' + esc(lst[0].d.title) + '</div><div class="card" style="padding:4px 12px">' + lst.slice(0, 6).map(x => '<div class="entry"><div>' + esc(x.e[0]) + '</div><div class="r" style="color:var(--ink)">' + esc(x.e[1]) + '</div></div>').join('') + '</div>';
   LIB.dicts.filter(d => d.kind === 'pages').forEach(d => { const pg = pageFind(d, lemma || cands[cands.length > 1 ? 1 : 0]); if (pg >= 0) h += '<button class="btn ghost" style="margin-top:8px" data-go="#/dpage/' + d.id + '/' + pg + '">📕 ' + esc(d.title) + ' — стр. ' + (pg + 1) + ' ›</button> '; });
   if (!ents.length && !lst.length) h += '<p class="muted small" style="margin-top:10px">Слова нет в словарях на устройстве. Впишите перевод сами или посмотрите онлайн-перевод.</p>';
@@ -8923,6 +8939,7 @@ const libReady = loadLib();
 
 /* ================= СВОЙ СЛОВАРЬ: новые статьи, значения, источники ================= */
 const live = () => DICT.filter(e => !e.del);
+const UIDMAP = new Map();
 const KEYMAP = new Map(); DICT.forEach(e => { if (!KEYMAP.has(e.key)) KEYMAP.set(e.key, e); });
 const MARKPOS = { 'м': 'м', 'ж': 'ж', 'с': 'ср', 'ср': 'ср', 'п': 'пр', 'прил': 'пр', 'г': 'гл', 'гл': 'гл', 'мн': 'мн', 'нар': 'нар' };
 /* ввод ударения: апостроф (чета') или заглавная гласная внутри слова (четА) */
@@ -8997,13 +9014,13 @@ function guessG(bg, pos) { return pos === 'гл' ? guessVerb(bg) : {}; }
 function applyU(u) {
   if (u.base) {
     const e = KEYMAP.get(u.base); if (!e) return;
-    e.add = (e.add || []).filter(a => a.uid !== u.id).concat([{ uid: u.id, ru: u.ru || '', ex: u.ex || [], src: u.src || '' }]);
+    e.add = (e.add || []).filter(a => a.uid !== u.id).concat([{ uid: u.id, ru: u.ru || '', ex: u.ex || [], src: u.src || '', page: u.page, srcId: u.srcId }]);
     return;
   }
-  const old = DICT.find(x => x.uid === u.id && !x.del); if (old) old.del = true;
+  const old = UIDMAP.get(u.id); if (old) old.del = true;
   if (u.replaces) { const b = KEYMAP.get(u.replaces); if (b && !b.uid) b.del = true; }
-  const e = { bg: u.bg, pos: u.pos, ru: u.ru || '', g: Object.assign({}, u.g || {}), ex: u.ex || [], src: u.src || '', uid: u.id, bulk: !!u.bulk, replaces: u.replaces || '' };
-  e.id = DICT.length; e.key = 'u|' + u.id; DICT.push(e); KEYMAP.set(e.key, e); indexEntry(e);
+  const e = { bg: u.bg, pos: u.pos, ru: u.ru || '', g: Object.assign({}, u.g || {}), ex: u.ex || [], src: u.src || '', uid: u.id, bulk: !!u.bulk, replaces: u.replaces || '', sl: u.sl || '', page: u.page, srcId: u.srcId };
+  e.id = DICT.length; e.key = 'u|' + u.id; DICT.push(e); KEYMAP.set(e.key, e); UIDMAP.set(u.id, e); indexEntry(e);
   if (old && old.add) e.add = old.add;
 }
 async function saveU(u) { u.t = u.t || Date.now(); await dbPut('uentries', u); applyU(u); return KEYMAP.get(u.base ? u.base : 'u|' + u.id); }
@@ -9011,7 +9028,7 @@ async function delUentry(id) {
   const u = await dbGet('uentries', id); await dbDel('uentries', id);
   if (!u) return;
   if (u.base) { const e = KEYMAP.get(u.base); if (e && e.add) e.add = e.add.filter(a => a.uid !== id); }
-  else { const e = DICT.find(x => x.uid === id && !x.del); if (e) e.del = true; if (u.replaces) { const b = KEYMAP.get(u.replaces); if (b) b.del = false; } }
+  else { const e = UIDMAP.get(id); if (e) { e.del = true; UIDMAP.delete(id); } if (u.replaces) { const b = KEYMAP.get(u.replaces); if (b) b.del = false; } }
 }
 async function bulkU(rows, msg) {
   const d = await idbOpen();
@@ -9034,11 +9051,11 @@ function planRows(items, src, srcId, bulk) {
     if (!ex.length && !/\s/.test(splitRefl(bg)[0])) ex = lookup(bg).filter(e => !it.pos || e.pos === it.pos || (['м', 'ж', 'ср', 'мн'].includes(e.pos) && ['м', 'ж', 'ср', 'мн'].includes(it.pos)));
     if (ex.length) {
       const e = ex[0]; if (norm(e.ru).includes(norm(ru)) || (e.add || []).some(a => norm(a.ru) === norm(ru))) return;
-      rows.push({ id: 'a' + Date.now().toString(36) + (n++), base: e.key, ru, src, srcId, bulk, t: Date.now() }); nAdd++;
+      rows.push({ id: 'a' + Date.now().toString(36) + (n++), base: e.key, ru, src, srcId, bulk, t: Date.now(), page: it.page, sl: it.sl }); nAdd++;
     } else {
       const k = norm(bg) + '|' + pos;
-      if (newMap.has(k)) { const r = newMap.get(k); if (!norm(r.ru).split(/; /).includes(norm(ru))) r.ru += '; ' + ru; return; }
-      const r = { id: 'u' + Date.now().toString(36) + (n++), bg, pos, ru, g: guessG(bg, pos), src, srcId, bulk, t: Date.now() };
+      if (newMap.has(k)) { const r = newMap.get(k); if (!norm(r.ru).split(/; /).includes(norm(ru))) r.ru += (it.page != null ? ' ◆ ' : '; ') + ru; return; }
+      const r = { id: 'u' + Date.now().toString(36) + (n++), bg, pos, ru, g: guessG(bg, pos), src, srcId, bulk, t: Date.now(), page: it.page, sl: it.sl };
       newMap.set(k, r); rows.push(r); nNew++;
     }
   });
@@ -9058,6 +9075,19 @@ function itemsFromList(entries, dir) { // пакет «Краткий слова
     });
   });
   return out;
+}
+async function removeSrcRows(id) {
+  const us = ((await dbAll('uentries')) || []).filter(u => u.srcId === id); if (!us.length) return;
+  const d = await idbOpen(); await new Promise(res => { const tx = d.transaction('uentries', 'readwrite'); const os = tx.objectStore('uentries'); us.forEach(u => os.delete(u.id)); tx.oncomplete = res; tx.onerror = res; });
+  us.forEach(u => { if (u.base) { const e = KEYMAP.get(u.base); if (e && e.add) e.add = e.add.filter(x => x.uid !== u.id); } else { const e = UIDMAP.get(u.id); if (e) { e.del = true; UIDMAP.delete(u.id); } } });
+}
+async function integrateBern(d, entries) {
+  showBusy('Вписываю слова словаря в общий словарь…');
+  const items = entries.map(([bg, pos, ru, page]) => ({ bg, pos, ru, page, sl: 'Бернш.' }));
+  const plan = planRows(items, 'Словарь Бернштейна', d.id, true);
+  await bulkU(plan.rows, 'Сохраняю статьи');
+  d.integrated = true; d.nNew = plan.nNew; d.nAdd = plan.nAdd; await dbPut('dicts', d);
+  hideBusy(); toast('Новых статей: ' + plan.nNew + ', значений к существующим: ' + plan.nAdd);
 }
 async function integrateList(d) {
   const L = await loadList(d.id); if (!L) return;
@@ -9318,6 +9348,157 @@ async function restoreBackup(d, z) {
     }
     hideBusy(); alert('Копия восстановлена. Приложение перезагрузится.'); location.reload();
   } catch (e) { hideBusy(); alert('Ошибка восстановления: ' + (e && e.message || e)); }
+}
+
+/* ================= ИНСТРУКЦИЯ ================= */
+const HELP = [
+['Установка и обновление', `
+<p><b>Установка.</b> Откройте адрес приложения (вида <i>https://ваш-логин.github.io/…</i>) в <b>Safari</b> → кнопка «Поделиться» (квадрат со стрелкой) → <b>«На экран „Домой“»</b> → «Добавить». Пользуйтесь приложением только с этой иконки: у Safari и у иконки разные хранилища, и книги, загруженные в Safari, в приложении не появятся.</p>
+<p><b>Обновление.</b> Новые версии приходят сами: когда вы открываете приложение с интернетом, оно проверяет GitHub, тихо скачивает новую версию и перезапускается с сообщением «Приложение обновлено». Проверить вручную: <i>Настройки → «Проверить обновление»</i>. Номер версии виден там же.</p>
+<p>После загрузки новых файлов на GitHub подождите около 10 минут (столько GitHub держит старые файлы в кэше), затем откройте приложение.</p>
+<div class="note"><b>Никогда не удаляйте иконку</b> и не очищайте данные сайтов в настройках Safari: вместе с ними удаляются книги, «Мои слова», закладки и прогресс. Перед любыми экспериментами сделайте полную резервную копию.</div>`],
+['Вкладки внизу экрана', `
+<ul><li><b>Курс</b> — 46 уроков от алфавита до сложной грамматики, прогресс.</li>
+<li><b>Словарь</b> — общий словарь: встроенный, ваши статьи, подключённые словари; поиск по любой форме слова.</li>
+<li><b>Чтение</b> — четыре раздела: «Тексты» (тексты курса для перевода), «Книги» (ваша библиотека), «Мои слова» (личный словарь из книг), «Словари» (свой словарь и подключённые).</li>
+<li><b>Таблицы</b> — справочник грамматики, разговорник и спрягатель глаголов.</li>
+<li><b>Карточки</b> — повторение слов по системе интервалов.</li>
+<li><b>Настройки</b> — оформление, голос, резервная копия, эта инструкция.</li></ul>
+<p>Кнопка <b>«‹ Назад»</b> вверху слева возвращает на предыдущий экран.</p>`],
+['Уроки курса', `
+<p>Уроки сгруппированы по частям. Пройденный урок отмечается ✓, вверху — общий прогресс и кнопка «Продолжить» со следующим уроком.</p>
+<p>В уроке: цель, оглавление (нажмите на пункт — экран прокрутится к разделу), теория с таблицами, примеры, диалоги, словарик, тест и письменная практика.</p>
+<ul><li><b>Кнопка 🔊 слева от примера</b> — озвучка фразы болгарским голосом.</li>
+<li><b>Кнопка 🎤 справа</b> — тренажёр произношения (см. раздел «Произношение»).</li>
+<li><b>Любое слово в примере</b> и <b>жирные подчёркнутые слова</b> в объяснениях нажимаются — открывается статья словаря с переводом и всеми формами.</li>
+<li><b>Тест:</b> выберите вариант — зелёный верно, красный неверно, ниже пояснение. При 70% и выше урок засчитывается автоматически.</li>
+<li><b>«Практика: напишите ответ»:</b> впишите ответ и нажмите «Проверить» (или Enter). Ударения ставить не нужно, регистр не важен. Ошибочные слова подчёркиваются, ниже — правильный ответ с ударением, озвучкой и правилом. «Ответ» показывает решение сразу. Счёт урока сохраняется.</li>
+<li>Внизу урока — «Отметить пройденным» и переход к соседним урокам.</li></ul>
+<p>Если в Настройках выключить «Показывать перевод примеров», переводы размываются — нажмите на размытую строку, чтобы проверить себя.</p>`],
+['Ударения', `
+<p>Ударная гласная показана знаком <b>´</b> и выделена красным. В односложных словах ударение не ставится (так принято в учебниках). Вид меняется в <i>Настройки → Ударения</i>: «Знак + цвет», «Только знак» или «Скрыть» (для самопроверки). В книгах то же меняется кнопкой «Аа».</p>
+<p>Ударения курса и словаря сверены с учебниками. Слова, у которых ударение ещё не указано (например, из подключённых словарей), помечены значком «без ударения» — его можно поставить кнопкой «✎ Уточнить» в статье.</p>`],
+['Нажатия на слова: что где открывается', `
+<ul><li><b>Уроки и таблицы:</b> нажатие на слово открывает <b>статью словаря</b> (снизу выезжает лист) и озвучивает слово. Если слова нет в словаре, оно только озвучивается.</li>
+<li><b>«Чтение → Тексты» и книги:</b> короткое нажатие открывает <b>лист слова</b>: само слово, словарная форма (<i>продадеш → прода́м</i>), перевод, краткие формы («наст.: прода́м, продаде́ш… · аорист… · буд.…»), строка <b>«Все формы ›»</b>, кнопка страницы скана словаря Бернштейна, предложение из текста с озвучкой и ссылкой «Перевести предложение онлайн ↗», и форма «В мой словарь».</li>
+<li><b>Долгое нажатие</b> в книге — выделение текста для пометки и заметки (см. «Закладки и пометки»).</li>
+<li><b>В статье словаря</b> нажимаются видовая пара, кнопки 🔊 у примеров, вкладки форм.</li>
+<li>Закрыть лист: <b>смахнуть вниз</b> или нажать на затемнённую часть экрана.</li></ul>`],
+['Статья словаря и все формы слова', `
+<p>Вверху — слово с ударением, кнопка 🔊, часть речи; у глагола вид и спряжение (I, II, III), у переходного глагола пометка «переходный». Ниже: источник (если слово добавлено из книги или словаря), перевод, ваши дополнительные значения (золотая плашка, ✕ — удалить), видовая пара, примеры.</p>
+<p><b>Глагол</b> — кнопки разделов:</p>
+<ul><li><b>Настоящее и будущее:</b> настоящее время, будущее (ще…), отрицание будущего (ня́ма да…), повелительное (ти/вие, запрет).</li>
+<li><b>Прошедшие:</b> аорист, имперфект, перфект и плюсквамперфект — с формами для мужского, женского и среднего рода (чел / че́ла / че́ло съм).</li>
+<li><b>Сложные будущие:</b> будущее в прошедшем, будущее предварительное, будущее предварительное в прошедшем.</li>
+<li><b>Пересказ:</b> пересказывательное наклонение (говорят, что…) — 5 времён.</li>
+<li><b>Условное:</b> бих + причастие, повелительное.</li>
+<li><b>Причастия:</b> прошедшее деятельное (аористное и имперфектное), настоящее деятельное, прошедшее страдательное — по родам и с артиклем; деепричастие.</li>
+<li><b>Все формы</b> — всё одной страницей.</li></ul>
+<p>Возвратная частица стоит на правильном месте: <i>ще се сме́я, смял се е, сме́ли са се</i>.</p>
+<p><b>Существительное:</b> единственное число, с артиклем (полный / краткий член у мужского рода), множественное, множественное с артиклем, счётная форма (два учебни́ка), звательная. Знак <b>≈</b> — форма построена по правилу и ещё не проверена.</p>
+<p><b>Прилагательное:</b> м./ж./ср. род и мн. число без артикля и с артиклем, сравнительная (по-) и превосходная (най-) степени.</p>
+<p>Кнопки внизу: <b>«+ В карточки»</b>, <b>«+ Значение / пример»</b> (своё значение, пример, источник), <b>«✎ Уточнить»</b> (для встроенных статей — сохранится ваша версия) или <b>«✎ Изменить»</b> (для ваших статей), ссылка <b>«Проверить в rechnik.chitanka.info ↗»</b> (нужен интернет).</p>`],
+['Вкладка «Словарь»: поиск', `
+<ul><li>Вводите слово <b>в любой форме</b> по-болгарски (че́тох, кни́гите, хубавата) или по-русски — найдётся статья. Ударения вводить не нужно.</li>
+<li><b>Болгарско-русский / Русско-болгарский</b> — порядок и сортировка списка.</li>
+<li>Фильтры: глаголы, существительные, прилагательные, наречия, прочие, выражения; ряд букв — список слов на букву.</li>
+<li>Значки в списке: <b>«мой»</b> — ваша статья, <b>«кратк.»</b> — из Краткого словаря, <b>«Бернш.»</b> — из словаря Бернштейна, <b>«+2»</b> — у статьи есть ваши дополнительные значения.</li>
+<li>Внизу — кнопки «Мой словарь» и «Подключить словарь».</li></ul>
+<p><b>Спрягатель</b> — на вкладке «Таблицы» внизу: введите глагол в любой форме (пи́сах, ще дойда) — откроются все времена.</p>`],
+['Тексты для перевода', `
+<p><i>Чтение → Тексты</i>: 16 текстов от A1 до B1. Три режима вверху:</p>
+<ul><li><b>Чтение</b> — «▶ Прочитать весь текст», «■ Стоп», галочка «перевод», 🔊 и 🎤 у каждого предложения, нажатие на слово — лист слова.</li>
+<li><b>РУ → БГ</b> — пишете перевод на болгарский, «Проверить» показывает процент совпадения и подсвечивает слова (зелёные совпали, красные — нет), «Образец» — эталон с ударениями. Возможны и другие верные переводы.</li>
+<li><b>БГ → РУ</b> — то же на русский.</li></ul>
+<p>Черновики сохраняются автоматически.</p>`],
+['Произношение', `
+<p>Кнопка <b>🎤</b> открывает тренажёр: образец обычной и медленной скоростью, красным — ударные гласные.</p>
+<ul><li><b>«Говорить»</b> — скажите фразу; приложение распознает речь и покажет, какие слова узнало (лексика и грамматика). Нужны интернет и разрешение на микрофон.</li>
+<li><b>«Записать» / «Моя запись»</b> — запишите себя (до 10 секунд) и сравните на слух с образцом. Ударение распознавание проверить не может — для него служит запись.</li></ul>`],
+['Книги: как загрузить', `
+<ol><li>Сохраните файл книги в приложение <b>«Файлы»</b> на iPhone (из письма, мессенджера, браузера, iCloud Drive).</li>
+<li>Откройте приложение с иконки → <i>Чтение → Книги</i> → <b>«+ Добавить книгу»</b> → выберите файл.</li></ol>
+<p>Форматы: <b>EPUB</b> (лучший — сохраняется оглавление), <b>FB2</b>, <b>TXT</b>, а также подготовленные файлы <b>.zip</b> (например, «Ян Бибиян» по методу Франка). Для EPUB нужна iOS 16.4 или новее. PDF не поддерживается — пришлите его мне, я подготовлю файл.</p>
+<p>Книги хранятся только на этом устройстве и никуда не публикуются. Удалить книгу — ✕ справа от неё (закладки этой книги удалятся, а слова в «Моих словах» останутся).</p>
+<p><b>Метод Франка:</b> абзац с ударениями и серыми русскими подсказками, затем тот же абзац без подсказок. В «Аа» можно оставить только подсказки или только оригинал.</p>`],
+['Чтение книги', `
+<p>Вверху — панель (видна всегда): <b>☰ Содержание · 🔖 · 🔍 · Аа</b> и номер страницы.</p>
+<ul><li>Листать: кнопки «‹ Назад» / «Далее ›» внизу или <b>свайп влево/вправо</b> по тексту.</li>
+<li><b>Место чтения сохраняется само</b> (страница и абзац) — при прокрутке, перелистывании, выходе из книги и сворачивании приложения. При открытии появится «Продолжаем с места, где вы остановились». В разделе «Книги» сверху — карточка <b>«Продолжить чтение»</b>.</li>
+<li><b>Аа</b>: размер шрифта, ударения, метод Франка, «Озвучивать слово при нажатии».</li>
+<li>Слова из «Моих слов» подчёркнуты золотым.</li></ul>`],
+['Закладки, пометки и поиск в книге', `
+<p><b>Закладка:</b> прокрутите нужное место к верху экрана → <b>🔖</b> → при желании заметка и цвет → «Сохранить». У абзаца появятся полоса слева и значок 🔖 (нажмите на значок, чтобы изменить или удалить).</p>
+<p><b>Пометка фрагмента:</b> нажмите и <b>держите палец</b> на тексте → потяните края выделения → внизу кнопки <b>«✎ Отметить и заметка»</b>, 🔊 (прочитать выделенное), «Перевод ↗». Помеченные слова подсвечиваются. Системное меню iPhone («Скопировать») можно не трогать.</p>
+<p><b>☰ Содержание</b> — три вкладки: «Оглавление» (и переход на страницу по номеру), <b>«Закладки и заметки»</b> (цитата, заметка, страница; «Перейти ›» открывает место и подсвечивает абзац; «Изменить»), <b>«Поиск»</b>.</p>
+<p><b>🔍 Поиск</b> — по всему тексту книги и вашим заметкам; ударения и регистр не важны; нажатие на результат переносит к месту.</p>`],
+['Мои слова', `
+<p>Слова, которые вы добавили из книг и текстов кнопкой «+ В мой словарь».</p>
+<ul><li>При добавлении: проверьте поле «Слово» — должна быть словарная форма (у глагола 1-е лицо «аз …», у существительного без артикля); впишите или поправьте перевод.</li>
+<li>Галочка <b>«добавить в карточки»</b> — слово сразу попадёт в повторение.</li>
+<li>Галочка <b>«вписать в общий словарь»</b> (для новых слов) — создаст статью со всеми формами; уточнить её можно кнопкой «✎ Изменить».</li>
+<li>В разделе: поиск, фильтр по книгам, нажатие на слово — правка, удаление, переход к статье, кнопка «Все формы».</li>
+<li><b>«Учить в карточках»</b>, <b>«+ Слово вручную»</b>, <b>«Экспорт CSV»</b> (открывается в Excel/Numbers).</li></ul>`],
+['Свой словарь: новое слово, ударение, вид, спряжение', `
+<p><i>Чтение → Словари → «+ Новое слово»</i>. Внизу редактора — предпросмотр всех форм, он меняется по мере ввода.</p>
+<ul><li><b>Слово:</b> словарная форма. <b>Ударение</b> тремя способами: нажать на ударную гласную в ряду букв под полем (станет красной); апостроф после гласной — <code>чета'</code>; большая гласная — <code>четА</code>. Эти способы работают во всех полях редактора и в списках слов.</li>
+<li><b>Часть речи</b> угадывается по окончанию, поправьте кнопкой.</li>
+<li><b>Существительное:</b> множественное число (по правилу предлагается подсказка), счётная форма, формы с артиклем — если отличаются от правила.</li>
+<li><b>Прилагательное:</b> формы ж./ср./мн. — если отличаются от правила.</li>
+<li><b>Глагол:</b> вид (несовершенный / совершенный / двувидовой); возвратный (нет / се / си); <b>спряжение</b> — выберите кнопку с правильной формой «ти …» (I — чете́ш, II — гово́риш, III — для всех глаголов на -ам/-ям); <b>аорист</b> «вчера аз …» (подсказка по правилу — проверьте); 2–3 лицо аориста и причастие на -л — только если они особые (дошъ́л/дошла́…); видовая пара; галочка «переходный» (добавит страдательное причастие).</li>
+<li><b>Примеры:</b> по одному на строке, «болгарский = русский». <b>Источник:</b> книга, учебник, урок.</li></ul>
+<p>Сохранённая статья сразу ищется по любой форме, открывается при нажатии на слово в уроках и книгах и попадает в карточки.</p>`],
+['Списки слов из книг и учебников', `
+<p><i>Чтение → Словари → «+ Список слов из книги / учебника»</i>.</p>
+<ol><li>Впишите название источника (например, «Учебник Ивановой, урок 7»).</li>
+<li>Вставьте слова — по одному на строке: <code>ябълка ж — яблоко</code>, <code>отгова'рям — отвечать</code>. Разделитель: тире, «=», «;», «:» или табуляция. Часть речи можно указать после слова: м, ж, ср, мн, прил, гл, нар. Ударение — апостроф или большая гласная. Можно загрузить файл TXT/CSV.</li>
+<li>«Проверить» — приложение покажет, какие слова новые, а какие уже есть («есть в словаре» — им добавится значение). Слово в любой форме (думата) относится к основной статье (дума).</li>
+<li>«Добавить в словарь».</li></ol>`],
+['Свои значения и исправление статей', `
+<ul><li><b>«+ Значение / пример»</b> в любой статье — новое значение, пример с переводом и источник. Показывается золотой плашкой, удаляется ✕.</li>
+<li><b>«✎ Уточнить»</b> во встроенной статье — откроется редактор; сохранится ваша версия, исходная скроется. Если вашу версию удалить, исходная вернётся.</li>
+<li><b>«✎ Изменить»</b> — правка ваших статей и статей из подключённых словарей.</li>
+<li>Все ваши статьи: <i>Чтение → Словари</i>, список с поиском.</li></ul>`],
+['Подключённые словари', `
+<p>Файлы словарей (.zip) загружаются так же, как книги: сохраните файл в «Файлы» → <i>Чтение → Словари → «+ Добавить»</i>. Хранятся только на устройстве.</p>
+<ul><li><b>Краткий русско-болгарский словарь</b> — при загрузке все слова вписываются в общий словарь (значок «кратк.»); известные слова получают дополнительное значение.</li>
+<li><b>Словарь С. Б. Бернштейна</b> — при загрузке слова словаря вписываются в общий словарь (значок «Бернш.»), а у каждой такой статьи есть кнопка «📕 страница скана» с оригиналом. Текст статей распознан со скана — при сомнениях сверяйтесь с оригинальной страницей. Кнопка «Листать» открывает скан: листайте свайпом, увеличивайте «+ / −» или двумя пальцами, поле «Найти слово» открывает страницу по алфавиту.</li>
+<li>Если словарь был загружен раньше и не вписан — у него есть кнопка «Вписать в общий словарь».</li>
+<li>✕ удаляет словарь и его статьи из общего словаря (ваши статьи и дополнения остаются).</li></ul>`],
+['Карточки', `
+<ul><li><b>«Мои карточки» → «Повторять»</b> — слова, добавленные кнопками «+ В карточки» (из словаря, уроков, книг). Показываются по расписанию: «Помню» — следующий показ через 1, 2, 4, 8, 16, 32 дня; «Не помню» — слово вернётся завтра.</li>
+<li><b>Тренировка по наборам:</b> «Из моих книг», «Мой словарь», все слова, глаголы, существительные, прилагательные, выражения и темы — по 20 случайных карточек.</li>
+<li><b>БГ → РУ / РУ → БГ</b> — направление. Нажмите на карточку, чтобы перевернуть; 🔊 — озвучка; «Формы» — статья со всеми формами.</li></ul>`],
+['Настройки и голос', `
+<ul><li><b>Тема:</b> как в системе, светлая, тёмная, сепия, морская. <b>Размер шрифта</b> — для всего приложения (в книгах — отдельно в «Аа»).</li>
+<li><b>Ударения</b> и <b>перевод примеров</b> — см. выше.</li>
+<li><b>Голос:</b> чтобы работала озвучка, на iPhone откройте <i>Настройки → Универсальный доступ → Устный контент → Голоса → Болгарский</i> и загрузите голос (например, Daria). Затем выберите его в настройках приложения и задайте скорость; «▶ Здраве́йте!» — проверка.</li></ul>`],
+['Резервная копия и перенос на другое устройство', `
+<ul><li><b>«Быстрая копия»</b> — прогресс уроков и тестов, карточки и их расписание, «Мои слова», ваши статьи и значения, закладки, заметки, места чтения в книгах, черновики переводов, настройки.</li>
+<li><b>«Полная копия»</b> — всё то же плюс книги и подключённые словари.</li></ul>
+<p>После нажатия откроется окно «Поделиться» — выберите <b>«Сохранить в Файлы»</b> (лучше в iCloud Drive). Восстановление: <i>Настройки → «Восстановить из копии»</i> → файл копии; совпадающие данные заменятся, остальное сохранится, приложение перезапустится. Так же переносите всё на iPad или новый телефон.</p>
+<p>Совет: делайте быструю копию раз в неделю и полную — после загрузки новых книг.</p>`],
+['Без интернета', `
+<p>После первого открытия с интернетом всё приложение хранится на устройстве и работает в авиарежиме: уроки, практика, словари, тексты, книги, закладки, карточки, озвучка (если болгарский голос загружен в iPhone).</p>
+<p>Нужен интернет: распознавание речи, ссылки «Перевод ↗» и rechnik.chitanka.info, обновление приложения.</p>`],
+['Если что-то не работает', `
+<ul><li><b>Нет звука</b> — загрузите болгарский голос (см. «Настройки и голос»), проверьте беззвучный режим и громкость.</li>
+<li><b>Не видно новых функций</b> — подождите 10 минут после загрузки на GitHub, откройте приложение с интернетом, закройте его полностью (смахнуть вверх из переключателя приложений) и откройте снова; или <i>Настройки → «Проверить обновление»</i>.</li>
+<li><b>Книга не открывается</b> — проверьте формат (EPUB/FB2/TXT), обновите iOS; PDF пришлите для подготовки.</li>
+<li><b>Слова нет в словаре</b> — в книге нажмите «+ Создать статью» или впишите перевод и оставьте галочку «вписать в общий словарь».</li>
+<li><b>Распознавание речи не работает</b> — нужен интернет и разрешение на микрофон (Настройки iPhone → Safari/приложение); если iOS не поддерживает болгарский, пользуйтесь записью.</li>
+<li><b>Мало места</b> — объём данных виден в Настройках; удалите прочитанные книги (сначала сделайте полную копию).</li></ul>`]
+];
+function renderHelp() {
+  setTitle('Инструкция', true);
+  let h = '<input class="search" id="hq" type="search" placeholder="Поиск по инструкции" autocapitalize="off"><div id="hl"></div>';
+  view.innerHTML = h;
+  const draw = q => {
+    q = norm(q || '');
+    $('#hl').innerHTML = HELP.filter(([t, b]) => !q || norm(t + ' ' + b.replace(/<[^>]+>/g, ' ')).includes(q))
+      .map(([t, b], i) => '<details class="card hlp"' + (q ? ' open' : '') + '><summary>' + esc(t) + '</summary><div class="hb">' + b + '</div></details>').join('') || '<p class="muted">Ничего не найдено</p>';
+  };
+  $('#hq').oninput = e => draw(e.target.value); draw('');
 }
 
 /* ---------- старт ---------- */
