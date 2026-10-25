@@ -8420,15 +8420,20 @@ async function importFile(file) {
   try {
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     const buf = await file.arrayBuffer(); const u8 = new Uint8Array(buf);
-    const fname = file.name.replace(/\.(epub|fb2|txt|zip|json)$/i, '');
+    const fname = file.name.replace(/\.(epub|fb2|txt|zip|json|bgcopy)$/i, '');
+    const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
+    if (!u8.length) throw new Error('файл пустой. Если он хранится в iCloud, откройте его в приложении «Файлы», дождитесь загрузки (исчезнет значок облака) и выберите снова.');
     let pack = null, z = null;
-    if (u8[0] === 0x50 && u8[1] === 0x4b) {
+    let pk = -1; for (let i = 0; i < Math.min(u8.length - 3, 64); i++) if (u8[i] === 0x50 && u8[i + 1] === 0x4b && u8[i + 2] === 3 && u8[i + 3] === 4) { pk = i; break; }
+    if (pk >= 0) {
       z = await unzip(buf);
       if (z.has('bgbackup.json')) { const d = JSON.parse(await z.get('bgbackup.json', true)); hideBusy(); await restoreBackup(d, z); return; }
       if (z.has('bgpack.json')) pack = JSON.parse(await z.get('bgpack.json', true));
       else if (z.has('META-INF/container.xml')) { showBusy('Разбираю EPUB…'); pack = await parseEpub(z, fname); }
       else { const fb = z.names.find(n => /\.fb2$/i.test(n)); if (fb) pack = parseFb2(decodeText(await z.get(fb)), fname); else throw new Error('В архиве нет книги или словаря'); }
     } else {
+      if (['zip', 'bgcopy', 'epub'].includes(ext)) throw new Error('файл повреждён или скачан не полностью. Сохраните его заново в «Файлы» и повторите.');
+      if (u8.slice(0, 4000).some(b => b === 0)) throw new Error('это не книга и не копия приложения. Поддерживаются: EPUB, FB2, TXT, файлы .zip/.bgcopy/.json, созданные приложением.');
       const text = decodeText(u8);
       if (/^\s*\{/.test(text)) { pack = JSON.parse(text); if (pack.app === 'bg-course') { hideBusy(); await restoreBackup(pack, null); return; } }
       else if (/<FictionBook/i.test(text.slice(0, 2000))) pack = parseFb2(text, fname);
@@ -9319,8 +9324,8 @@ async function exportBackup(full) {
         const r = await dbGet('pages', dc.id + '/' + i); if (r) files.push({ name: 'pages/' + dc.id + '/' + i + (r.b.type === 'image/webp' ? '.webp' : '.png'), data: new Uint8Array(await r.b.arrayBuffer()) });
       }
     }
-    showBusy('Упаковываю…'); const blob = makeZip(files); hideBusy();
-    await shareOrDownload(blob, 'bulgarski-polnaya-kopiya-' + day + '.zip');
+    showBusy('Упаковываю…'); const blob = new Blob([makeZip(files)], { type: 'application/octet-stream' }); hideBusy();
+    await shareOrDownload(blob, 'bulgarski-polnaya-kopiya-' + day + '.bgcopy');
   } catch (e) { hideBusy(); alert('Не удалось сохранить копию: ' + (e && e.message || e)); }
 }
 async function putAll(name, rows) {
@@ -9346,7 +9351,8 @@ async function restoreBackup(d, z) {
         await putAll('pages', rows);
       }
     }
-    hideBusy(); alert('Копия восстановлена. Приложение перезагрузится.'); location.reload();
+    const noPages = !z && (d.dicts || []).some(x => x.kind === 'pages');
+    hideBusy(); alert('Копия восстановлена.' + (noPages ? ' Страницы скана словаря в этом файле не сохранены — чтобы листать скан, загрузите файл словаря заново (Чтение → Словари → + Добавить); слова словаря уже на месте.' : '') + ' Приложение перезагрузится.'); location.reload();
   } catch (e) { hideBusy(); alert('Ошибка восстановления: ' + (e && e.message || e)); }
 }
 
@@ -9476,7 +9482,12 @@ const HELP = [
 ['Резервная копия и перенос на другое устройство', `
 <ul><li><b>«Быстрая копия»</b> — прогресс уроков и тестов, карточки и их расписание, «Мои слова», ваши статьи и значения, закладки, заметки, места чтения в книгах, черновики переводов, настройки.</li>
 <li><b>«Полная копия»</b> — всё то же плюс книги и подключённые словари.</li></ul>
-<p>После нажатия откроется окно «Поделиться» — выберите <b>«Сохранить в Файлы»</b> (лучше в iCloud Drive). Восстановление: <i>Настройки → «Восстановить из копии»</i> → файл копии; совпадающие данные заменятся, остальное сохранится, приложение перезапустится. Так же переносите всё на iPad или новый телефон.</p>
+<p>После нажатия откроется окно «Поделиться» — выберите <b>«Сохранить в Файлы»</b> (лучше в iCloud Drive). Быстрая копия — файл <code>…kopiya….json</code>, полная — один файл <code>…polnaya-kopiya….bgcopy</code>. <b>Не распаковывайте и не открывайте его</b> — это единый файл для приложения.</p>
+<p><b>Перенос на другой телефон / iPad:</b></p><ol><li>На старом телефоне: <i>Настройки → «Полная копия»</i> → «Сохранить в Файлы» → iCloud Drive (или отправьте файл себе в Telegram/почту).</li>
+<li>На новом телефоне: откройте адрес приложения в Safari → «На экран „Домой“» → откройте приложение <b>с иконки</b> и дождитесь загрузки (в Настройках та же версия, что на старом телефоне; при необходимости «Проверить обновление»).</li>
+<li>Если файл в iCloud, откройте приложение «Файлы» и нажмите на значок облака у файла, чтобы он скачался полностью.</li>
+<li>В приложении: <i>Настройки → «Восстановить из копии»</i> → выберите файл <code>.bgcopy</code> (или <code>.json</code>) → подтвердите. Приложение перезапустится со всеми данными.</li></ol>
+<p>Старые полные копии с расширением <code>.zip</code> тоже подходят: выбирайте сам файл <code>.zip</code>. Если iPhone уже распаковал его в папку, можно выбрать файл <code>bgbackup.json</code> внутри папки — восстановится всё, кроме страниц скана словаря (их потом загрузите файлом словаря).</p>
 <p>Совет: делайте быструю копию раз в неделю и полную — после загрузки новых книг.</p>`],
 ['Без интернета', `
 <p>После первого открытия с интернетом всё приложение хранится на устройстве и работает в авиарежиме: уроки, практика, словари, тексты, книги, закладки, карточки, озвучка (если болгарский голос загружен в iPhone).</p>
