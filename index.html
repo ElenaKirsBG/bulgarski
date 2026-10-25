@@ -8032,9 +8032,19 @@ function renderSettings() {
     '<p class="small"><b>Быстрая копия</b> — прогресс уроков, карточки, «Мои слова», ваши статьи словаря, закладки, заметки и места чтения в книгах (маленький файл).</p>' +
     '<p class="small"><b>Полная копия</b> — всё то же плюс сами книги и подключённые словари (файл большой: словарь Бернштейна ~26 МБ).</p><p class="small muted" id="stUse"></p>' +
     '<div class="row"><button class="btn" id="exp">Быстрая копия</button><button class="btn ghost" id="expF">Полная копия</button><label class="btn ghost" style="display:inline-block">Восстановить из копии<input type="file" id="imp" hidden></label></div><div class="row" style="margin-top:8px"><button class="btn red" id="rst">Сбросить прогресс</button></div></div>' +
+    '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Версия приложения: <span id="appVer">…</span></b><div class="small muted">Обновления с GitHub приходят сами при запуске с интернетом</div></div><button class="btn ghost" id="updBtn">Проверить обновление</button></div></div>' +
     '<div class="card small"><b>О приложении</b><p>Курс болгарского языка для русскоговорящих: ' + LESSONS.length + ' уроков, ' + GRAMMAR.length + ' справочных таблиц, словарь — ' + live().length + ' статей с грамматическими формами. Работает без интернета после первой загрузки.</p><p class="muted">© ' + new Date().getFullYear() + ' Elena Kirsanova. Все права защищены. Копирование и распространение без согласия автора запрещено.</p></div>';
   view.innerHTML = h;
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(x => { const el = $('#stUse'); if (el) el.textContent = 'Занято на устройстве: ' + (x.usage / 1048576).toFixed(1) + ' МБ (книг: ' + LIB.books.length + ', словарей: ' + LIB.dicts.length + ', слов в моём словаре: ' + LIB.words.length + ').'; }).catch(() => {});
+  appVersion().then(v => { const el = $('#appVer'); if (el) el.textContent = v; });
+  $('#updBtn').onclick = async () => {
+    if (!swReg) { toast('Обновление доступно только в установленном приложении'); return; }
+    toast('Проверяю…');
+    try { await swReg.update(); } catch (e) { toast('Нет интернета'); return; }
+    const w = swReg.installing || swReg.waiting;
+    if (!w) { toast('У вас последняя версия: ' + ($('#appVer').textContent)); return; }
+    toast('Загружаю новую версию…'); w.addEventListener('statechange', () => { if (w.state === 'activated') location.reload(); });
+  };
   $('#sTheme').onchange = e => { S.theme = e.target.value; saveS(); };
   $('#sFs').oninput = e => { S.fs = +e.target.value; $('#fsv').textContent = S.fs; saveS(); };
   $('#sSt').onchange = e => { S.stress = e.target.value; saveS(); toast('Сохранено'); };
@@ -9314,7 +9324,14 @@ async function restoreBackup(d, z) {
 const setHH = () => { const hd = document.querySelector('header.top'); if (hd) document.documentElement.style.setProperty('--hh', hd.offsetHeight + 'px'); };
 setHH(); window.addEventListener('resize', setHH);
 route();
-if ('serviceWorker' in navigator && window.isSecureContext && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+let swReg = null;
+if ('serviceWorker' in navigator && window.isSecureContext && location.protocol !== 'file:') {
+  const hadCtrl = !!navigator.serviceWorker.controller; let reloaded = false;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => { swReg = r; r.update().catch(() => {}); }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadCtrl || reloaded) return; reloaded = true; try { saveBookPos(); } catch (e) {} toast('Приложение обновлено'); setTimeout(() => location.reload(), 600); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && swReg) swReg.update().catch(() => {}); });
+}
+async function appVersion() { try { const k = await caches.keys(); const v = k.find(x => x.startsWith('bg-course-v')); return v ? v.replace('bg-course-v', '') : '—'; } catch (e) { return '—'; } }
 window.__BG = { DICT, LESSONS, GRAMMAR, TEXTS, LIB, importFile, lookup, verbForms, nounForms, adjForms };
 })();
 
