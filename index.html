@@ -160,7 +160,7 @@ select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background
 .busy .card{display:flex;gap:12px;align-items:center;max-width:340px}
 .spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--accent-soft);border-top-color:var(--accent);animation:sp 0.9s linear infinite;flex:none}
 @keyframes sp{to{transform:rotate(360deg)}}
-.rbar{display:flex;gap:8px;align-items:center;margin:2px 0 10px;flex-wrap:wrap}
+.rbar{display:flex;gap:8px;align-items:center;margin:0 -16px 10px;padding:6px 16px;flex-wrap:wrap;position:sticky;top:var(--hh,52px);z-index:15;background:var(--bg);border-bottom:1px solid var(--line)}
 .rtitle{margin:6px 0 18px;text-align:center}
 .reader{line-height:1.62;color:var(--ink)}
 .reader .bp{margin:0 0 .75em;text-indent:1.3em}
@@ -189,6 +189,16 @@ select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background
 .srcb{font-size:.7em;color:var(--gold);border:1px solid var(--gold);border-radius:6px;padding:0 4px;margin-left:6px}
 .mf{color:var(--muted);line-height:1.45}
 .vtabs{margin:12px 0 4px}
+.mk{border-left:3px solid var(--gold);padding-left:8px;margin-left:-11px}
+.mbadge{float:right;font-size:.8em;cursor:pointer;margin-left:6px;padding:0 4px;border-radius:6px;background:var(--accent-soft)}
+.w.hlq{background:rgba(214,180,106,.38);border-radius:2px}
+.flash{animation:fl 1.8s ease}@keyframes fl{0%,40%{background:rgba(214,180,106,.5)}100%{background:transparent}}
+.selbar{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));display:none;justify-content:center;gap:8px;z-index:40;padding:8px}
+.selbar.show{display:flex}.selbar .btn{box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.mquote{font-style:italic;padding:8px 12px;border-left:3px solid var(--gold);background:var(--accent-soft);border-radius:8px;margin:8px 0}
+.mrow.c-green{border-left:4px solid #3a9a5b;padding-left:8px}.mrow.c-blue{border-left:4px solid #3b6fb6;padding-left:8px}.mrow.c-red{border-left:4px solid #c0474b;padding-left:8px}.mrow.c-gold{border-left:4px solid var(--gold);padding-left:8px}
+.cont{border:1px solid var(--gold);cursor:pointer}
+mark{background:rgba(214,180,106,.5);color:inherit;border-radius:2px}
 </style>
 </head>
 <body>
@@ -7633,7 +7643,7 @@ function route() {
   const h = location.hash.replace(/^#\/?/, '') || 'course';
   const [p, a, c] = h.split('/');
   tab = ['course', 'lesson'].includes(p) ? 'course' : (p === 'gr' ? 'grammar' : (['text', 'read', 'book'].includes(p) ? 'texts' : (p === 'dpage' ? 'dict' : p)));
-  if (p !== 'book') window.onscroll = null;
+  if (p !== 'book') { if (RB) saveBookPos(); window.onscroll = null; document.onselectionchange = null; }
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   closeSheet();
   if (p === 'lesson') renderLesson(LESSONS.find(l => l.id === a), LESSONS);
@@ -8018,8 +8028,10 @@ function renderSettings() {
     '<div class="set-row"><span>Скорость: <b id="rv">' + S.rate + '</b></span><input id="sRate" type="range" min="0.5" max="1.2" step="0.05" value="' + S.rate + '"></div>' +
     '<div class="set-row"><span>Проверить</span><button class="btn ghost" id="sTest">▶ Здраве́йте!</button></div>' +
     '<p class="small muted">На iPhone болгарский голос включается так: Настройки → Универсальный доступ → Устный контент → Голоса → Болгарский → загрузите голос (например, «Daria»).</p></div>' +
-    '<div class="card"><b>Прогресс</b><p class="small muted">Данные хранятся только на этом устройстве. Сохраните резервную копию (прогресс, карточки, «Мои слова» и ваши статьи словаря), чтобы перенести их на iPad или другой телефон. Книги и словари в копию не входят — их загружают из файлов заново.</p><p class="small muted" id="stUse"></p>' +
-    '<div class="row"><button class="btn ghost" id="exp">Сохранить копию</button><label class="btn ghost" style="display:inline-block">Загрузить копию<input type="file" id="imp" accept=".json,application/json" hidden></label><button class="btn red" id="rst">Сбросить</button></div></div>' +
+    '<div class="card"><b>Резервная копия</b><p class="small muted">Всё хранится только на этом устройстве. Копию сохраните в «Файлы» или iCloud Drive — из неё всё восстанавливается на этом или другом iPhone/iPad.</p>' +
+    '<p class="small"><b>Быстрая копия</b> — прогресс уроков, карточки, «Мои слова», ваши статьи словаря, закладки, заметки и места чтения в книгах (маленький файл).</p>' +
+    '<p class="small"><b>Полная копия</b> — всё то же плюс сами книги и подключённые словари (файл большой: словарь Бернштейна ~26 МБ).</p><p class="small muted" id="stUse"></p>' +
+    '<div class="row"><button class="btn" id="exp">Быстрая копия</button><button class="btn ghost" id="expF">Полная копия</button><label class="btn ghost" style="display:inline-block">Восстановить из копии<input type="file" id="imp" hidden></label></div><div class="row" style="margin-top:8px"><button class="btn red" id="rst">Сбросить прогресс</button></div></div>' +
     '<div class="card small"><b>О приложении</b><p>Курс болгарского языка для русскоговорящих: ' + LESSONS.length + ' уроков, ' + GRAMMAR.length + ' справочных таблиц, словарь — ' + live().length + ' статей с грамматическими формами. Работает без интернета после первой загрузки.</p><p class="muted">© ' + new Date().getFullYear() + ' Elena Kirsanova. Все права защищены. Копирование и распространение без согласия автора запрещено.</p></div>';
   view.innerHTML = h;
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(x => { const el = $('#stUse'); if (el) el.textContent = 'Занято на устройстве: ' + (x.usage / 1048576).toFixed(1) + ' МБ (книг: ' + LIB.books.length + ', словарей: ' + LIB.dicts.length + ', слов в моём словаре: ' + LIB.words.length + ').'; }).catch(() => {});
@@ -8030,13 +8042,9 @@ function renderSettings() {
   $('#sVoice').onchange = e => { S.voice = e.target.value; saveS(); };
   $('#sRate').oninput = e => { S.rate = +e.target.value; $('#rv').textContent = S.rate; saveS(); };
   $('#sTest').onclick = () => say('Здравейте! Как сте?');
-  $('#exp').onclick = async () => {
-    let ue = []; try { ue = ((await dbAll('uentries')) || []).filter(u => !u.bulk); } catch (er) {}
-    const data = JSON.stringify({ app: 'bg-course', v: 3, progress, srs, settings: S, words: LIB.words, uentries: ue }, null, 1);
-    const blob = new Blob([data], { type: 'application/json' }); const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'bulgarian-progress-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.appendChild(a); a.click(); a.remove();
-  };
-  $('#imp').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (d.progress) { progress = d.progress; store.set('progress', progress); } if (d.srs) { srs = d.srs; store.set('srs', srs); } if (Array.isArray(d.words)) d.words.forEach(w => saveWord(w).catch(() => {})); if (Array.isArray(d.uentries)) { const us = d.uentries.slice().sort((x, y) => (x.base ? 1 : 0) - (y.base ? 1 : 0)); (async () => { for (const u of us) { try { await saveU(u); } catch (er) {} } })(); } toast('Прогресс загружен'); } catch (er) { toast('Неверный файл'); } }; r.readAsText(f); };
+  $('#exp').onclick = () => exportBackup(false);
+  $('#expF').onclick = () => exportBackup(true);
+  $('#imp').onchange = async e => { const f = e.target.files[0]; if (f) await importFile(f); e.target.value = ''; };
   $('#rst').onclick = () => { if (confirm('Сбросить прогресс уроков и карточек?')) { progress = {}; srs = {}; store.set('progress', progress); store.set('srs', srs); toast('Прогресс сброшен'); } };
 }
 
@@ -8195,7 +8203,7 @@ function openSpeak(target) {
 
 /* ================= БИБЛИОТЕКА: мои книги, словари, мой словарь ================= */
 /* Книги и словари пользователь загружает сам; они хранятся только на устройстве (IndexedDB) и никуда не публикуются. */
-const LIB = { ready: false, books: [], dicts: [], words: [], lists: {}, ocr: {} };
+const LIB = { ready: false, books: [], dicts: [], words: [], marks: [], lists: {}, ocr: {} };
 let MYE = [];            // слова «моего словаря» в виде карточек
 let MYSET = new Set();   // нормализованные формы, которые встречались при добавлении (для подсветки в книге)
 let idbP = null;
@@ -8203,10 +8211,10 @@ function idbOpen() {
   if (idbP) return idbP;
   idbP = new Promise((res, rej) => {
     if (!('indexedDB' in window)) { rej(new Error('Хранилище недоступно')); return; }
-    const r = indexedDB.open('bg-library', 2);
+    const r = indexedDB.open('bg-library', 3);
     r.onupgradeneeded = () => {
       const d = r.result;
-      ['books', 'bookdata', 'dicts', 'dictdata', 'words', 'uentries'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
+      ['books', 'bookdata', 'dicts', 'dictdata', 'words', 'uentries', 'marks'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
       if (!d.objectStoreNames.contains('pages')) d.createObjectStore('pages', { keyPath: 'k' });
     };
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
@@ -8237,6 +8245,7 @@ async function loadLib() {
     LIB.dicts = (d || []).sort((x, y) => x.added - y.added);
     LIB.words = (w || []).sort((x, y) => y.t - x.t);
     for (const x of LIB.dicts) { if (x.kind === 'list') await loadList(x.id); else loadOcr(x).catch(() => {}); }
+    LIB.marks = (await dbAll('marks')) || [];
     const us = (await dbAll('uentries')) || []; us.sort((x, y) => (x.t || 0) - (y.t || 0));
     us.filter(u => !u.base).forEach(applyU); us.filter(u => u.base).forEach(applyU);
   } catch (e) { console.warn('lib', e); }
@@ -8392,12 +8401,13 @@ async function importFile(file) {
     let pack = null, z = null;
     if (u8[0] === 0x50 && u8[1] === 0x4b) {
       z = await unzip(buf);
+      if (z.has('bgbackup.json')) { const d = JSON.parse(await z.get('bgbackup.json', true)); hideBusy(); await restoreBackup(d, z); return; }
       if (z.has('bgpack.json')) pack = JSON.parse(await z.get('bgpack.json', true));
       else if (z.has('META-INF/container.xml')) { showBusy('Разбираю EPUB…'); pack = await parseEpub(z, fname); }
       else { const fb = z.names.find(n => /\.fb2$/i.test(n)); if (fb) pack = parseFb2(decodeText(await z.get(fb)), fname); else throw new Error('В архиве нет книги или словаря'); }
     } else {
       const text = decodeText(u8);
-      if (/^\s*\{/.test(text)) pack = JSON.parse(text);
+      if (/^\s*\{/.test(text)) { pack = JSON.parse(text); if (pack.app === 'bg-course') { hideBusy(); await restoreBackup(pack, null); return; } }
       else if (/<FictionBook/i.test(text.slice(0, 2000))) pack = parseFb2(text, fname);
       else pack = parseTxt(text, file.name);
     }
@@ -8440,6 +8450,7 @@ async function saveDict(p, z) {
 }
 async function deleteBook(id) {
   await dbDel('books', id); await dbDel('bookdata', id);
+  for (const m of LIB.marks.filter(x => x.book === id)) await dbDel('marks', m.id); LIB.marks = LIB.marks.filter(x => x.book !== id); if (RB && RB.meta.id === id) RB = null;
   LIB.books = LIB.books.filter(b => b.id !== id); try { localStorage.removeItem('bg.bookpos.' + id); } catch (e) {}
 }
 async function deleteDict(id) {
@@ -8504,11 +8515,13 @@ function fileBtn(id, label, accept) { return '<label class="btn" style="display:
 function drawBooks() {
   let h = '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Книги на болгарском</b><div class="small muted">EPUB, FB2, TXT или подготовленный файл .zip</div></div>' + fileBtn('bookFile', '+ Добавить книгу', '') + '</div>' +
     '<p class="small muted" style="margin:10px 0 0">Нажмите на любое слово в книге: появятся перевод, формы, ударение и кнопка «В мой словарь». Книги хранятся только на этом устройстве и не попадают на GitHub.</p></div>';
+  const last = LIB.books.slice().sort((x, y) => ((store.get('bookpos.' + y.id, {}) || {}).t || y.opened || 0) - ((store.get('bookpos.' + x.id, {}) || {}).t || x.opened || 0))[0];
+  if (last) { const lp = store.get('bookpos.' + last.id, null); if (lp) h += '<div class="card cont" data-go="#/book/' + last.id + '"><div class="small muted">Продолжить чтение</div><div class="t" style="font-weight:650">' + st(last.title) + '</div><div class="small muted">стр. ' + ((lp.p || 0) + 1) + ' из ' + (lp.of || '?') + '</div></div>'; }
   if (!LIB.books.length) h += '<p class="muted">Пока нет книг. Скачайте файл книги в приложение «Файлы» и нажмите «+ Добавить книгу».</p>';
   LIB.books.forEach(b => {
     const pos = store.get('bookpos.' + b.id, null); const pct = pos && pos.of ? Math.round((pos.p + 1) / pos.of * 100) : 0;
-    const nw = LIB.words.filter(w => w.book === b.id).length;
-    h += '<div class="card lesson-item" data-go="#/book/' + b.id + '"><div class="num">' + (pct ? pct + '%' : '📖') + '</div><div style="flex:1;min-width:0"><div class="t">' + st(b.title) + '</div><div class="s">' + esc(b.author || '') + (b.author ? ' · ' : '') + (b.pages || Math.ceil(b.chars / 4300)) + ' стр.' + (nw ? ' · слов в словаре: ' + nw : '') + '</div></div><button class="chip" data-delbook="' + b.id + '" aria-label="Удалить">✕</button></div>';
+    const nw = LIB.words.filter(w => w.book === b.id).length; const nm = LIB.marks.filter(m => m.book === b.id).length;
+    h += '<div class="card lesson-item" data-go="#/book/' + b.id + '"><div class="num">' + (pct ? pct + '%' : '📖') + '</div><div style="flex:1;min-width:0"><div class="t">' + st(b.title) + '</div><div class="s">' + esc(b.author || '') + (b.author ? ' · ' : '') + (b.pages || Math.ceil(b.chars / 4300)) + ' стр.' + (nw ? ' · слов: ' + nw : '') + (nm ? ' · 🔖 ' + nm : '') + (pos ? ' · стр. ' + ((pos.p || 0) + 1) : '') + '</div></div><button class="chip" data-delbook="' + b.id + '" aria-label="Удалить">✕</button></div>';
   });
   $('#rbody').innerHTML = h;
   $('#bookFile').onchange = async e => { const f = e.target.files[0]; if (f) await importFile(f); };
@@ -8617,74 +8630,186 @@ function bookPages(blocks) {
   }
   pages.push(start); return pages;
 }
-async function renderBook(id) {
+async function renderBook(id, jump) {
   if (!LIB.ready) await libReady;
   const meta = LIB.books.find(b => b.id === id);
   if (!meta) { go('#/read/books'); return; }
   setTitle(plain(meta.title), true);
+  let fresh = false;
   if (!RB || RB.meta.id !== id) {
+    if (RB) saveBookPos();
     view.innerHTML = '<p class="muted">Открываю книгу…</p>';
     const data = await dbGet('bookdata', id); if (!data) { view.innerHTML = '<p class="muted">Книга не найдена</p>'; return; }
     RB = { meta, blocks: data.blocks, toc: data.toc || [], pages: bookPages(data.blocks) };
-    const pos = store.get('bookpos.' + id, null); RB.p = pos ? Math.min(pos.p, RB.pages.length - 1) : 0; RB.y = pos ? pos.y || 0 : 0;
+    const pos = store.get('bookpos.' + id, null);
+    RB.p = pos ? Math.max(0, Math.min(pos.p || 0, RB.pages.length - 1)) : 0;
+    RB.anchor = pos && pos.i != null ? pos.i : null; RB.y = pos ? pos.y || 0 : 0;
     meta.opened = Date.now(); dbPut('books', meta).catch(() => {});
+    fresh = !!pos && (RB.p > 0 || RB.anchor);
   }
+  if (jump != null) { RB.p = pageOf(jump); RB.anchor = jump; RB.flash = jump; }
   drawBookPage(true);
+  if (fresh && jump == null) toast('Продолжаем с места, где вы остановились: стр. ' + (RB.p + 1));
 }
+const pageOf = i => { let p = 0; RB.pages.forEach((s, k) => { if (s <= i) p = k; }); return p; };
+function topBlock() {
+  const els = view.querySelectorAll('.reader [data-i]'); const rb = view.querySelector('.rbar'); const top = rb ? rb.getBoundingClientRect().bottom : 70;
+  for (const el of els) { const r = el.getBoundingClientRect(); if (r.bottom > top + 4) return +el.dataset.i; }
+  return els.length ? +els[0].dataset.i : null;
+}
+function saveBookPos() {
+  if (!RB || !location.hash.startsWith('#/book/' + RB.meta.id)) { if (RB && RB._lastSave) store.set('bookpos.' + RB.meta.id, RB._lastSave); return; }
+  const i = topBlock();
+  const pos = { p: RB.p, of: RB.pages.length, i: i != null ? i : RB.pages[RB.p], y: Math.round(window.scrollY), t: Date.now() };
+  RB._lastSave = pos; store.set('bookpos.' + RB.meta.id, pos);
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveBookPos(); });
+window.addEventListener('pagehide', saveBookPos);
+function scrollToBlock(i, flash) {
+  const go1 = () => { const el = view.querySelector('.reader [data-i="' + i + '"]'); if (!el) return false; const rb = view.querySelector('.rbar'); const off = (rb ? rb.offsetHeight : 40) + (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hh')) || 52) + 6; window.scrollTo(0, Math.max(0, el.getBoundingClientRect().top + window.scrollY - off)); if (flash) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1800); } return true; };
+  go1(); requestAnimationFrame(() => requestAnimationFrame(() => go1())); setTimeout(go1, 150);
+}
+function marksOf(bookId) { return LIB.marks.filter(m => m.book === bookId).sort((a, b) => a.i - b.i || a.t - b.t); }
 function drawBookPage(restore) {
   const b = RB, p = b.p, from = b.pages[p], to = p + 1 < b.pages.length ? b.pages[p + 1] : b.blocks.length;
   const fm = S.frank || 'both';
-  let h = '<div class="rbar"><button class="chip" id="rbToc">☰ Оглавление</button><button class="chip" id="rbOpt">Аа</button><span class="small muted" style="margin-left:auto">' + (p + 1) + ' / ' + b.pages.length + '</span></div>';
+  const mk = marksOf(b.meta.id); const mkBy = {}; mk.forEach(m => { (mkBy[m.i] = mkBy[m.i] || []).push(m); });
+  let h = '<div class="rbar"><button class="chip" id="rbToc">☰ Содержание</button><button class="chip" id="rbMark" title="Закладка">🔖</button><button class="chip" id="rbFind" title="Поиск">🔍</button><button class="chip" id="rbOpt">Аа</button><span class="small muted" style="margin-left:auto">' + (p + 1) + ' / ' + b.pages.length + '</span></div>';
   if (p === 0) h += '<div class="rtitle"><div class="big">' + st(b.meta.title) + '</div>' + (b.meta.author ? '<div class="muted">' + esc(b.meta.author) + '</div>' : '') + (b.meta.note ? '<div class="small muted" style="margin-top:6px">' + esc(b.meta.note) + '</div>' : '') + '</div>';
   h += '<article class="reader' + (b.meta.frank ? ' frank fm-' + fm : '') + '" style="font-size:' + (S.rfs || S.fs + 1) + 'px">';
   for (let i = from; i < to; i++) {
-    const [t, x] = b.blocks[i];
-    if (t === 'h') h += '<h2 class="bh" data-i="' + i + '">' + wordsHtml(x) + '</h2>';
-    else if (t === 'g') h += '<p class="bp g" data-i="' + i + '">' + glossHtml(x) + '</p>';
-    else h += '<p class="bp" data-i="' + i + '">' + wordsHtml(x) + '</p>';
+    const [t, x] = b.blocks[i]; const ms = mkBy[i];
+    const badge = ms ? '<span class="mbadge" data-mi="' + i + '">' + (ms.some(m => m.kind === 'bm') ? '🔖' : '') + (ms.some(m => m.kind === 'hl') ? '✎' : '') + '</span>' : '';
+    const cls = ms ? ' mk' : '';
+    if (t === 'h') h += '<h2 class="bh' + cls + '" data-i="' + i + '">' + badge + wordsHtml(x) + '</h2>';
+    else if (t === 'g') h += '<p class="bp g' + cls + '" data-i="' + i + '">' + badge + glossHtml(x) + '</p>';
+    else h += '<p class="bp' + cls + '" data-i="' + i + '">' + badge + wordsHtml(x) + '</p>';
   }
   h += '</article><div class="rnav"><button class="btn ghost" id="rbPrev" ' + (p ? '' : 'disabled') + '>‹ Назад</button><span class="small muted">' + Math.round((p + 1) / b.pages.length * 100) + '%</span><button class="btn" id="rbNext" ' + (p + 1 < b.pages.length ? '' : 'disabled') + '>Далее ›</button></div>';
+  h += '<div id="selbar" class="selbar"><button class="btn" id="sbMark">✎ Отметить и заметка</button><button class="btn ghost" id="sbSay">🔊</button><button class="btn ghost" id="sbTr">Перевод ↗</button></div>';
   view.innerHTML = h;
-  const save = () => store.set('bookpos.' + b.meta.id, { p: b.p, of: b.pages.length, y: Math.round(window.scrollY) });
-  save();
-  window.scrollTo(0, restore ? b.y || 0 : 0);
-  $('#rbPrev').onclick = () => { if (b.p > 0) { b.p--; drawBookPage(); } };
-  $('#rbNext').onclick = () => { if (b.p + 1 < b.pages.length) { b.p++; drawBookPage(); } };
-  $('#rbToc').onclick = () => {
-    const toc = b.toc.length ? b.toc : [[plain(b.meta.title), 0]];
-    let s = '<div class="muted small">Оглавление</div><div class="big" style="margin-bottom:8px">' + st(b.meta.title) + '</div>';
-    s += toc.map(([t, i]) => { const pg = b.pages.filter(x => x <= i).length - 1; return '<div class="entry" data-tp="' + pg + '"><div>' + st(t) + '</div><div class="r">' + (pg + 1) + '</div></div>'; }).join('');
-    s += '<div class="row" style="margin-top:12px"><span class="small muted">Перейти на страницу</span><input class="search" id="gotoP" type="number" min="1" max="' + b.pages.length + '" style="width:110px;margin:0"><button class="btn ghost" id="gotoB">Перейти</button></div>';
-    $('#sheetBody').innerHTML = s; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); $('#sheet').scrollTop = 0;
-    $('#sheetBody').querySelectorAll('[data-tp]').forEach(r => r.onclick = () => { b.p = +r.dataset.tp; closeSheet(); drawBookPage(); });
-    $('#gotoB').onclick = () => { const v = +$('#gotoP').value; if (v >= 1 && v <= b.pages.length) { b.p = v - 1; closeSheet(); drawBookPage(); } };
-  };
+  // подсветка отмеченных фрагментов
+  mk.filter(m => m.kind === 'hl' && m.quote && m.i >= from && m.i < to).forEach(m => {
+    const el = view.querySelector('.reader [data-i="' + m.i + '"]'); if (!el) return;
+    const ws = [...el.querySelectorAll('.w')]; const q = (tidy(m.quote).match(new RegExp(WORD_RE.source, 'g')) || []).filter(z => /[А-Яа-яЁё]/.test(z)).map(norm);
+    if (!q.length) return;
+    for (let s = 0; s + q.length <= ws.length; s++) { let ok = true; for (let k = 0; k < q.length; k++) if (norm(ws[s + k].textContent) !== q[k]) { ok = false; break; } if (ok) { for (let k = 0; k < q.length; k++) ws[s + k].classList.add('hlq'); break; } }
+  });
+  if (restore && b.anchor != null && b.anchor >= from && b.anchor < to) scrollToBlock(b.anchor, b.flash === b.anchor);
+  else if (restore && b.y) window.scrollTo(0, b.y);
+  else window.scrollTo(0, 0);
+  b.flash = null; b.anchor = null;
+  setTimeout(saveBookPos, 400);
+  const turn = d => { saveBookPos(); b.p += d; b.anchor = null; b.y = 0; drawBookPage(); saveBookPos(); };
+  $('#rbPrev').onclick = () => { if (b.p > 0) turn(-1); };
+  $('#rbNext').onclick = () => { if (b.p + 1 < b.pages.length) turn(1); };
+  $('#rbToc').onclick = () => bookSheet('toc');
+  $('#rbFind').onclick = () => bookSheet('find');
+  $('#rbMark').onclick = () => { const i = topBlock(); if (i == null) return; const ex = LIB.marks.find(m => m.book === b.meta.id && m.i === i && m.kind === 'bm'); editMark(ex || { kind: 'bm', book: b.meta.id, i, quote: plain(b.blocks[i][1]).slice(0, 160) }); };
+  view.querySelectorAll('.mbadge').forEach(x => x.onclick = ev => { ev.stopPropagation(); const ms = mkBy[+x.dataset.mi]; if (ms.length === 1) editMark(ms[0]); else bookSheet('marks', +x.dataset.mi); });
   $('#rbOpt').onclick = () => {
     let s = '<div class="muted small">Настройки чтения</div><div class="set-row"><span>Размер шрифта: <b id="rfsv">' + (S.rfs || S.fs + 1) + '</b></span><input type="range" id="rfs" min="14" max="30" value="' + (S.rfs || S.fs + 1) + '"></div>';
     if (b.meta.frank) s += '<div class="set-row"><span>Метод Франка</span><select id="fmS"><option value="both">Подсказки + оригинал</option><option value="g">Только с подсказками</option><option value="p">Только оригинал</option></select></div>';
     s += '<div class="set-row"><span>Ударения</span><select id="rstr"><option value="color">Знак + цвет</option><option value="mark">Только знак</option><option value="none">Скрыть</option></select></div>';
     s += '<div class="set-row"><span>Озвучивать слово при нажатии</span><label class="toggle"><input type="checkbox" id="rsay" ' + (S.autoSay ? 'checked' : '') + '><span></span></label></div>';
-    s += '<p class="small muted">Слова из «Моего словаря» подчёркнуты золотым. Нажмите на любое слово, чтобы увидеть перевод.</p>';
+    s += '<p class="small muted">Нажмите на слово — перевод и формы. Выделите текст пальцем — появится кнопка «✎ Отметить и заметка». 🔖 вверху — закладка на текущем месте. Место чтения сохраняется автоматически.</p>';
     $('#sheetBody').innerHTML = s; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open');
     $('#rfs').oninput = e => { S.rfs = +e.target.value; $('#rfsv').textContent = S.rfs; saveS(); view.querySelector('.reader').style.fontSize = S.rfs + 'px'; };
-    const fmS = $('#fmS'); if (fmS) { fmS.value = fm; fmS.onchange = e => { S.frank = e.target.value; saveS(); drawBookPage(); }; }
+    const fmS = $('#fmS'); if (fmS) { fmS.value = fm; fmS.onchange = e => { S.frank = e.target.value; saveS(); b.anchor = topBlock(); drawBookPage(true); }; }
     $('#rsay').onchange = e => { S.autoSay = e.target.checked; saveS(); };
-    $('#rstr').value = S.stress; $('#rstr').onchange = e => { S.stress = e.target.value; saveS(); drawBookPage(); };
+    $('#rstr').value = S.stress; $('#rstr').onchange = e => { S.stress = e.target.value; saveS(); b.anchor = topBlock(); drawBookPage(true); };
   };
   let tx0 = null, ty0b = null;
   const art = view.querySelector('.reader');
   art.addEventListener('touchstart', e => { tx0 = e.touches[0].clientX; ty0b = e.touches[0].clientY; }, { passive: true });
-  art.addEventListener('touchend', e => { if (tx0 == null) return; const dx = e.changedTouches[0].clientX - tx0, dy = e.changedTouches[0].clientY - ty0b; tx0 = null; if (Math.abs(dx) > 80 && Math.abs(dy) < 40 && (!window.visualViewport || visualViewport.scale <= 1.01)) { if (dx < 0) $('#rbNext').click(); else $('#rbPrev').click(); } });
+  art.addEventListener('touchend', e => { if (tx0 == null) return; const dx = e.changedTouches[0].clientX - tx0, dy = e.changedTouches[0].clientY - ty0b; tx0 = null; const sel = window.getSelection && String(window.getSelection()).trim(); if (!sel && Math.abs(dx) > 80 && Math.abs(dy) < 40 && (!window.visualViewport || visualViewport.scale <= 1.01)) { if (dx < 0) $('#rbNext').click(); else $('#rbPrev').click(); } });
   art.onclick = e => {
     const sel = window.getSelection && window.getSelection(); if (sel && String(sel).trim()) return;
+    if (e.target.closest('.mbadge')) return;
     const w = e.target.closest('.w'); if (!w) return;
     view.querySelectorAll('.w.hl').forEach(x => x.classList.remove('hl')); w.classList.add('hl');
     const para = w.closest('[data-i]'); const blk = b.blocks[+para.dataset.i];
     const ws = [...para.querySelectorAll('.w')]; const k = ws.indexOf(w);
     openWordSheet(w.textContent, sentenceAt(blk[0] === 'g' ? blk[1].replace(/\([^()]*\)/g, ' ') : blk[1], k, para), b.meta);
   };
+  // выделение текста → заметка
+  const selInfo = () => {
+    const sel = window.getSelection(); const txt = sel ? String(sel).replace(/\s+/g, ' ').trim() : '';
+    if (!txt || !sel.rangeCount) return null;
+    const node = sel.getRangeAt(0).startContainer; const el = (node.nodeType === 1 ? node : node.parentElement); const para = el && el.closest && el.closest('.reader [data-i]');
+    return para ? { txt, i: +para.dataset.i } : null;
+  };
+  document.onselectionchange = () => { if (!location.hash.startsWith('#/book/')) { document.onselectionchange = null; return; } const sb = $('#selbar'); if (sb) sb.classList.toggle('show', !!selInfo()); };
+  $('#sbMark').onclick = () => { const s = selInfo(); if (!s) return; window.getSelection().removeAllRanges(); $('#selbar').classList.remove('show'); editMark({ kind: 'hl', book: b.meta.id, i: s.i, quote: s.txt }); };
+  $('#sbSay').onclick = () => { const s = selInfo(); if (s) say(s.txt); };
+  $('#sbTr').onclick = () => { const s = selInfo(); if (s) window.open('https://translate.google.com/?sl=bg&tl=ru&op=translate&text=' + encodeURIComponent(plain(s.txt)), '_blank'); };
   clearTimeout(drawBookPage._t);
-  window.onscroll = () => { if (!location.hash.startsWith('#/book/')) { window.onscroll = null; return; } clearTimeout(drawBookPage._t); drawBookPage._t = setTimeout(() => { b.y = window.scrollY; save(); }, 400); };
+  window.onscroll = () => { if (!location.hash.startsWith('#/book/')) { window.onscroll = null; return; } clearTimeout(drawBookPage._t); drawBookPage._t = setTimeout(saveBookPos, 300); };
+}
+/* закладки и заметки */
+function editMark(m) {
+  const b = RB; const isNew = !m.id;
+  const pg = b ? pageOf(m.i) + 1 : '';
+  let h = '<div class="muted small">' + (m.kind === 'bm' ? 'Закладка' : 'Пометка и заметка') + ' · стр. ' + pg + '</div>';
+  h += '<div class="mquote">' + st(m.quote || '') + '</div>';
+  h += '<label class="fl">Заметка (необязательно)<textarea class="tin" id="mkN" rows="3" placeholder="например: красивая фраза; вернуться к грамматике; перевод…">' + esc(m.note || '') + '</textarea></label>';
+  h += '<div class="small muted">Цвет</div><div class="chips" id="mkC">' + [['gold', '🟡'], ['green', '🟢'], ['blue', '🔵'], ['red', '🔴']].map(([k, n]) => '<button class="chip' + ((m.color || 'gold') === k ? ' on' : '') + '" data-c="' + k + '">' + n + '</button>').join('') + '</div>';
+  h += '<div class="row" style="margin-top:12px"><button class="btn" id="mkS">' + (isNew ? 'Сохранить' : 'Обновить') + '</button>' + (isNew ? '' : '<button class="btn red" id="mkD">Удалить</button>') + '</div>';
+  $('#sheetBody').innerHTML = h; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); $('#sheet').scrollTop = 0;
+  let color = m.color || 'gold';
+  $('#mkC').querySelectorAll('[data-c]').forEach(x => x.onclick = () => { color = x.dataset.c; $('#mkC').querySelectorAll('[data-c]').forEach(y => y.classList.toggle('on', y === x)); });
+  $('#mkS').onclick = async () => {
+    const r = Object.assign({}, m, { id: m.id || 'm' + Date.now().toString(36), note: $('#mkN').value.trim(), color, t: m.t || Date.now() });
+    await dbPut('marks', r); LIB.marks = LIB.marks.filter(x => x.id !== r.id).concat([r]);
+    closeSheet(); toast(m.kind === 'bm' ? 'Закладка сохранена' : 'Пометка сохранена');
+    if (RB && location.hash.startsWith('#/book/')) { RB.anchor = topBlock(); drawBookPage(true); }
+  };
+  const d = $('#mkD'); if (d) d.onclick = async () => { await dbDel('marks', m.id); LIB.marks = LIB.marks.filter(x => x.id !== m.id); closeSheet(); toast('Удалено'); if (RB && location.hash.startsWith('#/book/')) { RB.anchor = topBlock(); drawBookPage(true); } };
+}
+let bookFindQ = '';
+function bookSheet(tab, onlyI) {
+  const b = RB; if (!b) return;
+  const mk = marksOf(b.meta.id);
+  let h = '<div class="seg" id="bsSeg"><button data-bt="toc">Оглавление</button><button data-bt="marks">Закладки и заметки (' + mk.length + ')</button><button data-bt="find">Поиск</button></div><div id="bsBody"></div>';
+  $('#sheetBody').innerHTML = h; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); $('#sheet').scrollTop = 0;
+  const goI = i => { closeSheet(); saveBookPos(); b.p = pageOf(i); b.anchor = i; b.flash = i; drawBookPage(true); };
+  const draw = t => {
+    $('#bsSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.bt === t));
+    const B = $('#bsBody'); let s = '';
+    if (t === 'toc') {
+      const toc = b.toc.length ? b.toc : [[plain(b.meta.title), 0]];
+      s += toc.map(([tt, i]) => '<div class="entry" data-gi="' + i + '"><div>' + st(tt) + '</div><div class="r">' + (pageOf(i) + 1) + '</div></div>').join('');
+      s += '<div class="row" style="margin-top:12px"><span class="small muted">Страница</span><input class="search" id="gotoP" type="number" min="1" max="' + b.pages.length + '" style="width:110px;margin:0" placeholder="' + (b.p + 1) + '"><button class="btn ghost" id="gotoB">Перейти</button></div>';
+    } else if (t === 'marks') {
+      const list = onlyI != null ? mk.filter(m => m.i === onlyI) : mk;
+      s += list.length ? list.map(m => '<div class="entry mrow c-' + (m.color || 'gold') + '" data-mid="' + m.id + '" style="flex-direction:column;gap:2px"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><span>' + (m.kind === 'bm' ? '🔖 Закладка' : '✎ Пометка') + '</span><span class="r">стр. ' + (pageOf(m.i) + 1) + '</span></div><div class="small" style="font-style:italic">«' + esc(plain(m.quote || '').slice(0, 180)) + '»</div>' + (m.note ? '<div class="small"><b>' + esc(m.note) + '</b></div>' : '') + '<div class="row small"><a href="javascript:void 0" data-go2="' + m.i + '">Перейти ›</a><a href="javascript:void 0" data-ed="' + m.id + '">Изменить</a></div></div>').join('') :
+        '<p class="muted small">Пока нет закладок. 🔖 вверху страницы — закладка на текущем месте; выделите текст пальцем — «✎ Отметить и заметка».</p>';
+    } else {
+      s += '<input class="search" id="bfq" type="search" placeholder="Слово или фраза — по всей книге и заметкам" value="' + esc(bookFindQ) + '" autocapitalize="off" lang="bg"><div id="bfr"></div>';
+    }
+    B.innerHTML = s;
+    B.querySelectorAll('[data-gi]').forEach(x => x.onclick = () => goI(+x.dataset.gi));
+    B.querySelectorAll('[data-go2]').forEach(x => x.onclick = ev => { ev.stopPropagation(); goI(+x.dataset.go2); });
+    B.querySelectorAll('[data-ed]').forEach(x => x.onclick = ev => { ev.stopPropagation(); editMark(LIB.marks.find(m => m.id === x.dataset.ed)); });
+    B.querySelectorAll('[data-mid]').forEach(x => x.onclick = () => goI(LIB.marks.find(m => m.id === x.dataset.mid).i));
+    const gb = $('#gotoB'); if (gb) gb.onclick = () => { const v = +$('#gotoP').value; if (v >= 1 && v <= b.pages.length) { closeSheet(); saveBookPos(); b.p = v - 1; b.anchor = null; b.y = 0; drawBookPage(); } };
+    const fq = $('#bfq'); if (fq) {
+      let tm = null;
+      const run = () => {
+        bookFindQ = fq.value; const q = norm(fq.value); const R = $('#bfr');
+        if (q.length < 2) { R.innerHTML = '<p class="small muted">Введите не меньше 2 букв. Ударения и регистр не важны.</p>'; return; }
+        const res = []; const qm = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        mk.forEach(m => { if (norm((m.note || '') + ' ' + (m.quote || '')).includes(q)) res.push({ i: m.i, note: m }); });
+        for (let i = 0; i < b.blocks.length && res.length < 300; i++) { const tx = plain(b.blocks[i][1]).replace(/ѝ/g, 'и'); const k = tx.toLowerCase().search(qm); if (k >= 0) res.push({ i, k, tx }); }
+        R.innerHTML = '<p class="small muted">Найдено: ' + res.length + (res.length >= 300 ? '+' : '') + '</p>' + res.map(r => r.note ? '<div class="entry" data-gi="' + r.i + '"><div>✎ ' + esc(r.note.note || plain(r.note.quote).slice(0, 80)) + '</div><div class="r">стр. ' + (pageOf(r.i) + 1) + '</div></div>' :
+          '<div class="entry" data-gi="' + r.i + '"><div class="small">…' + esc(r.tx.slice(Math.max(0, r.k - 50), r.k)) + '<mark>' + esc(r.tx.substr(r.k, q.length)) + '</mark>' + esc(r.tx.slice(r.k + q.length, r.k + q.length + 70)) + '…</div><div class="r">' + (pageOf(r.i) + 1) + '</div></div>').join('');
+        R.querySelectorAll('[data-gi]').forEach(x => x.onclick = () => goI(+x.dataset.gi));
+      };
+      fq.oninput = () => { clearTimeout(tm); tm = setTimeout(run, 250); }; run(); fq.focus();
+    }
+  };
+  $('#bsSeg').querySelectorAll('button').forEach(x => x.onclick = () => { onlyI = null; draw(x.dataset.bt); });
+  draw(tab || 'toc');
 }
 function sentenceAt(text, k, para) {
   // k — номер слова в абзаце (среди кликабельных); глоссы Франка не считаются
@@ -9105,7 +9230,89 @@ function miniForms(e) {
   return '';
 }
 
+/* ================= РЕЗЕРВНАЯ КОПИЯ ================= */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) { // files: [{name, data:Uint8Array}] — без сжатия
+  const te = new TextEncoder(); const parts = [], central = []; let off = 0;
+  files.forEach(f => {
+    const nm = te.encode(f.name), d = f.data, crc = crc32(d);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x800, true); lh.setUint16(8, 0, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, d.length, true); lh.setUint32(22, d.length, true); lh.setUint16(26, nm.length, true);
+    parts.push(new Uint8Array(lh.buffer), nm, d);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x800, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, d.length, true); ch.setUint32(24, d.length, true); ch.setUint16(28, nm.length, true); ch.setUint32(42, off, true);
+    central.push(new Uint8Array(ch.buffer), nm);
+    off += 30 + nm.length + d.length;
+  });
+  const csize = central.reduce((s, x) => s + x.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, csize, true); end.setUint32(16, off, true);
+  return new Blob(parts.concat(central, [new Uint8Array(end.buffer)]), { type: 'application/zip' });
+}
+async function shareOrDownload(blob, name) {
+  try {
+    const f = new File([blob], name, { type: blob.type || 'application/octet-stream' });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  downloadBlob(blob, name);
+}
+function lsDump(prefixes) { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (prefixes.some(p => k.startsWith('bg.' + p))) o[k] = localStorage.getItem(k); } } catch (e) {} return o; }
+async function backupData(full) {
+  const all = n => dbAll(n).catch(() => []);
+  const d = { app: 'bg-course', v: 4, date: new Date().toISOString(), progress, srs, settings: S, ls: lsDump(['bookpos.', 'text.', 'readTab', 'lastSrc']),
+    words: LIB.words, marks: LIB.marks, uentries: ((await all('uentries')) || []).filter(u => full || !u.bulk) };
+  if (full) { d.books = await all('books'); d.bookdata = await all('bookdata'); d.dicts = await all('dicts'); d.dictdata = await all('dictdata'); }
+  return d;
+}
+async function exportBackup(full) {
+  showBusy(full ? 'Собираю полную копию…' : 'Сохраняю копию…');
+  try {
+    const d = await backupData(full); const day = new Date().toISOString().slice(0, 10);
+    if (!full) { hideBusy(); await shareOrDownload(new Blob([JSON.stringify(d)], { type: 'application/json' }), 'bulgarski-kopiya-' + day + '.json'); return; }
+    const te = new TextEncoder(); const files = [{ name: 'bgbackup.json', data: te.encode(JSON.stringify(d)) }];
+    for (const dc of (d.dicts || []).filter(x => x.kind === 'pages')) {
+      for (let i = 0; i < dc.count; i++) {
+        if (i % 50 === 0) showBusy('Копирую страницы словаря «' + dc.title + '»: ' + i + ' из ' + dc.count);
+        const r = await dbGet('pages', dc.id + '/' + i); if (r) files.push({ name: 'pages/' + dc.id + '/' + i + (r.b.type === 'image/webp' ? '.webp' : '.png'), data: new Uint8Array(await r.b.arrayBuffer()) });
+      }
+    }
+    showBusy('Упаковываю…'); const blob = makeZip(files); hideBusy();
+    await shareOrDownload(blob, 'bulgarski-polnaya-kopiya-' + day + '.zip');
+  } catch (e) { hideBusy(); alert('Не удалось сохранить копию: ' + (e && e.message || e)); }
+}
+async function putAll(name, rows) {
+  if (!rows || !rows.length) return; const d = await idbOpen();
+  for (let i = 0; i < rows.length; i += 400) await new Promise((res, rej) => { const tx = d.transaction(name, 'readwrite'); const os = tx.objectStore(name); rows.slice(i, i + 400).forEach(r => os.put(r)); tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('Недостаточно места')); });
+}
+async function restoreBackup(d, z) {
+  const n = (d.books || []).length, m = (d.dicts || []).length;
+  if (!confirm('Восстановить копию от ' + (d.date ? new Date(d.date).toLocaleString('ru-RU') : '—') + '?\nПрогресс, карточки, мои слова, закладки' + (n ? ', книг: ' + n : '') + (m ? ', словарей: ' + m : '') + '.\nСовпадающие данные будут заменены, остальное сохранится.')) return;
+  showBusy('Восстанавливаю…');
+  try {
+    if (d.progress) { progress = d.progress; store.set('progress', progress); }
+    if (d.srs) { srs = d.srs; store.set('srs', srs); }
+    if (d.settings) { Object.assign(S, d.settings); saveS(); }
+    if (d.ls) Object.keys(d.ls).forEach(k => { try { localStorage.setItem(k, d.ls[k]); } catch (e) {} });
+    await putAll('words', d.words); await putAll('marks', d.marks); await putAll('uentries', d.uentries);
+    await putAll('books', d.books); await putAll('bookdata', d.bookdata); await putAll('dicts', d.dicts); await putAll('dictdata', d.dictdata);
+    if (z) {
+      const pg = z.names.filter(x => x.startsWith('pages/'));
+      for (let i = 0; i < pg.length; i += 40) {
+        showBusy('Восстанавливаю страницы словарей: ' + i + ' из ' + pg.length);
+        const rows = []; for (const nm of pg.slice(i, i + 40)) { const [, id, f] = nm.split('/'); rows.push({ k: id + '/' + parseInt(f, 10), b: new Blob([await z.get(nm)], { type: f.endsWith('.webp') ? 'image/webp' : 'image/png' }) }); }
+        await putAll('pages', rows);
+      }
+    }
+    hideBusy(); alert('Копия восстановлена. Приложение перезагрузится.'); location.reload();
+  } catch (e) { hideBusy(); alert('Ошибка восстановления: ' + (e && e.message || e)); }
+}
+
 /* ---------- старт ---------- */
+const setHH = () => { const hd = document.querySelector('header.top'); if (hd) document.documentElement.style.setProperty('--hh', hd.offsetHeight + 'px'); };
+setHH(); window.addEventListener('resize', setHH);
 route();
 if ('serviceWorker' in navigator && window.isSecureContext && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 window.__BG = { DICT, LESSONS, GRAMMAR, TEXTS, LIB, importFile, lookup, verbForms, nounForms, adjForms };
