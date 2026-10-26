@@ -203,6 +203,9 @@ details.hlp{padding:0}details.hlp summary{padding:14px 16px;font-weight:650;curs
 details.hlp summary::after{content:"›";color:var(--accent);transform:rotate(90deg);transition:transform .2s}details.hlp[open] summary::after{transform:rotate(-90deg)}
 details.hlp summary::-webkit-details-marker{display:none}details.hlp .hb{padding:0 16px 14px;line-height:1.55}details.hlp .hb li{margin:4px 0}
 code{background:var(--accent-soft);padding:1px 5px;border-radius:5px;font-size:.95em}.help-card{cursor:pointer;border:1px solid var(--accent)}
+.ttsbar{position:fixed;left:8px;right:8px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:45;display:none;align-items:center;justify-content:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);max-width:740px;margin:0 auto;flex-wrap:wrap}
+.ttsbar.show{display:flex}.ttsbar .btn{padding:8px 16px}.ttsp{display:flex;align-items:center;gap:4px;margin-left:6px}.ttsp b{min-width:34px;text-align:center;font-size:.9em}
+.reader .speaking{background:rgba(124,196,160,.08);border-radius:8px}.reader .w.sp{background:rgba(124,196,160,.28);border-radius:3px}
 </style>
 </head>
 <body>
@@ -7662,7 +7665,7 @@ function route() {
   const h = location.hash.replace(/^#\/?/, '') || 'course';
   const [p, a, c] = h.split('/');
   tab = ['course', 'lesson'].includes(p) ? 'course' : (p === 'gr' ? 'grammar' : (['text', 'read', 'book'].includes(p) ? 'texts' : (p === 'dpage' ? 'dict' : (p === 'help' ? 'settings' : p))));
-  if (p !== 'book') { if (RB) saveBookPos(); window.onscroll = null; document.onselectionchange = null; }
+  if (p !== 'book') { if (RB) saveBookPos(); window.onscroll = null; document.onselectionchange = null; if (TTS.on) ttsStop(); }
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   closeSheet();
   if (p === 'lesson') renderLesson(LESSONS.find(l => l.id === a), LESSONS);
@@ -8720,7 +8723,7 @@ function drawBookPage(restore) {
   const b = RB, p = b.p, from = b.pages[p], to = p + 1 < b.pages.length ? b.pages[p + 1] : b.blocks.length;
   const fm = S.frank || 'both';
   const mk = marksOf(b.meta.id); const mkBy = {}; mk.forEach(m => { (mkBy[m.i] = mkBy[m.i] || []).push(m); });
-  let h = '<div class="rbar"><button class="chip" id="rbToc">☰ Содержание</button><button class="chip" id="rbMark" title="Закладка">🔖</button><button class="chip" id="rbFind" title="Поиск">🔍</button><button class="chip" id="rbOpt">Аа</button><span class="small muted" style="margin-left:auto">' + (p + 1) + ' / ' + b.pages.length + '</span></div>';
+  let h = '<div class="rbar"><button class="chip" id="rbToc">☰ Содержание</button><button class="chip" id="rbMark" title="Закладка">🔖</button><button class="chip" id="rbFind" title="Поиск">🔍</button><button class="chip" id="rbRead" title="Читать вслух">🔊</button><button class="chip" id="rbOpt">Аа</button><span class="small muted" style="margin-left:auto">' + (p + 1) + ' / ' + b.pages.length + '</span></div>';
   if (p === 0) h += '<div class="rtitle"><div class="big">' + st(b.meta.title) + '</div>' + (b.meta.author ? '<div class="muted">' + esc(b.meta.author) + '</div>' : '') + (b.meta.note ? '<div class="small muted" style="margin-top:6px">' + esc(b.meta.note) + '</div>' : '') + '</div>';
   h += '<article class="reader' + (b.meta.frank ? ' frank fm-' + fm : '') + '" style="font-size:' + (S.rfs || S.fs + 1) + 'px">';
   for (let i = from; i < to; i++) {
@@ -8751,18 +8754,22 @@ function drawBookPage(restore) {
   $('#rbNext').onclick = () => { if (b.p + 1 < b.pages.length) turn(1); };
   $('#rbToc').onclick = () => bookSheet('toc');
   $('#rbFind').onclick = () => bookSheet('find');
+  $('#rbRead').onclick = () => { if (TTS.on) { ttsStop(); return; } const i = topBlock(); ttsStart(i == null ? b.pages[b.p] : i); };
+  if (TTS.on && TTS.q[TTS.k]) setTimeout(() => ttsHi(TTS.q[TTS.k]), 30);
   $('#rbMark').onclick = () => { const i = topBlock(); if (i == null) return; const ex = LIB.marks.find(m => m.book === b.meta.id && m.i === i && m.kind === 'bm'); editMark(ex || { kind: 'bm', book: b.meta.id, i, quote: plain(b.blocks[i][1]).slice(0, 160) }); };
   view.querySelectorAll('.mbadge').forEach(x => x.onclick = ev => { ev.stopPropagation(); const ms = mkBy[+x.dataset.mi]; if (ms.length === 1) editMark(ms[0]); else bookSheet('marks', +x.dataset.mi); });
   $('#rbOpt').onclick = () => {
     let s = '<div class="muted small">Настройки чтения</div><div class="set-row"><span>Размер шрифта: <b id="rfsv">' + (S.rfs || S.fs + 1) + '</b></span><input type="range" id="rfs" min="14" max="30" value="' + (S.rfs || S.fs + 1) + '"></div>';
     if (b.meta.frank) s += '<div class="set-row"><span>Метод Франка</span><select id="fmS"><option value="both">Подсказки + оригинал</option><option value="g">Только с подсказками</option><option value="p">Только оригинал</option></select></div>';
     s += '<div class="set-row"><span>Ударения</span><select id="rstr"><option value="color">Знак + цвет</option><option value="mark">Только знак</option><option value="none">Скрыть</option></select></div>';
+    s += '<div class="set-row"><span>Скорость чтения вслух: <b id="rrv">' + (S.readRate || 0.9).toFixed(1) + '</b></span><input type="range" id="rrate" min="0.5" max="1.6" step="0.1" value="' + (S.readRate || 0.9) + '"></div>';
     s += '<div class="set-row"><span>Озвучивать слово при нажатии</span><label class="toggle"><input type="checkbox" id="rsay" ' + (S.autoSay ? 'checked' : '') + '><span></span></label></div>';
     s += '<p class="small muted">Нажмите на слово — перевод и формы. Выделите текст пальцем — появится кнопка «✎ Отметить и заметка». 🔖 вверху — закладка на текущем месте. Место чтения сохраняется автоматически.</p>';
     $('#sheetBody').innerHTML = s; $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open');
     $('#rfs').oninput = e => { S.rfs = +e.target.value; $('#rfsv').textContent = S.rfs; saveS(); view.querySelector('.reader').style.fontSize = S.rfs + 'px'; };
     const fmS = $('#fmS'); if (fmS) { fmS.value = fm; fmS.onchange = e => { S.frank = e.target.value; saveS(); b.anchor = topBlock(); drawBookPage(true); }; }
     $('#rsay').onchange = e => { S.autoSay = e.target.checked; saveS(); };
+    $('#rrate').oninput = e => { S.readRate = +e.target.value; $('#rrv').textContent = S.readRate.toFixed(1); saveS(); ttsRate(); };
     $('#rstr').value = S.stress; $('#rstr').onchange = e => { S.stress = e.target.value; saveS(); b.anchor = topBlock(); drawBookPage(true); };
   };
   let tx0 = null, ty0b = null;
@@ -9443,11 +9450,18 @@ const HELP = [
 <p>Книги хранятся только на этом устройстве и никуда не публикуются. Удалить книгу — ✕ справа от неё (закладки этой книги удалятся, а слова в «Моих словах» останутся).</p>
 <p><b>Метод Франка:</b> абзац с ударениями и серыми русскими подсказками, затем тот же абзац без подсказок. В «Аа» можно оставить только подсказки или только оригинал.</p>`],
 ['Чтение книги', `
-<p>Вверху — панель (видна всегда): <b>☰ Содержание · 🔖 · 🔍 · Аа</b> и номер страницы.</p>
+<p>Вверху — панель (видна всегда): <b>☰ Содержание · 🔖 · 🔍 · 🔊 · Аа</b> и номер страницы.</p>
 <ul><li>Листать: кнопки «‹ Назад» / «Далее ›» внизу или <b>свайп влево/вправо</b> по тексту.</li>
 <li><b>Место чтения сохраняется само</b> (страница и абзац) — при прокрутке, перелистывании, выходе из книги и сворачивании приложения. При открытии появится «Продолжаем с места, где вы остановились». В разделе «Книги» сверху — карточка <b>«Продолжить чтение»</b>.</li>
 <li><b>Аа</b>: размер шрифта, ударения, метод Франка, «Озвучивать слово при нажатии».</li>
 <li>Слова из «Моих слов» подчёркнуты золотым.</li></ul>`],
+['Чтение книги вслух', `
+<p>Кнопка <b>🔊</b> на панели книги читает текст болгарским голосом iPhone <b>с того абзаца, который сейчас вверху экрана</b>. Читаемое предложение подсвечивается, экран прокручивается сам, страницы перелистываются автоматически.</p>
+<ul><li>Панель внизу: <b>⏮ / ⏭</b> — предыдущее / следующее предложение, <b>⏸ / ▶</b> — пауза и продолжение, <b>■</b> — остановить, <b>− / +</b> — скорость (от 0,5 до 1,6; по умолчанию 0,9). Скорость также меняется в «Аа».</li>
+<li>Во время чтения можно нажимать на слова — откроется перевод; чтение при этом продолжается.</li>
+<li>В книгах по методу Франка читается только болгарский текст (русские подсказки пропускаются).</li>
+<li>Экран не гаснет, пока идёт чтение. При блокировке экрана или сворачивании приложения iPhone останавливает озвучку — вернитесь и нажмите ▶.</li></ul>
+<p><b>Произношение и ударения</b> определяет сам болгарский голос iPhone (например, Daria): он читает по собственным правилам болгарской речи, ударения в большинстве слов ставит верно, но изредка ошибается — особенно в редких словах и словах, которые пишутся одинаково, а произносятся по-разному. Управлять ударениями голоса из приложения iOS не позволяет; если сомневаетесь — нажмите на слово и посмотрите ударение в словаре. Чем качественнее голос, тем лучше: в настройках iPhone загрузите версию голоса «улучшенное качество», если она доступна.</p>`],
 ['Закладки, пометки и поиск в книге', `
 <p><b>Закладка:</b> прокрутите нужное место к верху экрана → <b>🔖</b> → при желании заметка и цвет → «Сохранить». У абзаца появятся полоса слева и значок 🔖 (нажмите на значок, чтобы изменить или удалить).</p>
 <p><b>Пометка фрагмента:</b> нажмите и <b>держите палец</b> на тексте → потяните края выделения → внизу кнопки <b>«✎ Отметить и заметка»</b>, 🔊 (прочитать выделенное), «Перевод ↗». Помеченные слова подсвечиваются. Системное меню iPhone («Скопировать») можно не трогать.</p>
@@ -9525,6 +9539,96 @@ function renderHelp() {
       .map(([t, b], i) => '<details class="card hlp"' + (q ? ' open' : '') + '><summary>' + esc(t) + '</summary><div class="hb">' + b + '</div></details>').join('') || '<p class="muted">Ничего не найдено</p>';
   };
   $('#hq').oninput = e => draw(e.target.value); draw('');
+}
+
+/* ================= ЧТЕНИЕ КНИГИ ВСЛУХ ================= */
+const TTS = { on: false, paused: false, q: [], k: 0, timer: null, lock: null };
+function ttsText(b, i) { // текст блока для озвучки: только болгарский
+  const [t, x] = b.blocks[i];
+  if (b.meta.frank) {
+    const fm = S.frank || 'both';
+    if (t === 'g' && fm !== 'g') return '';         // подсказки пропускаем, читаем оригинал
+    if (t === 'p' && fm === 'g') return '';
+    if (t === 'g' || t === 'h') return x.replace(/\([^()]*\)/g, ' ');
+  }
+  return x;
+}
+function ttsBuild(fromI) {
+  const b = RB, q = [];
+  for (let i = fromI; i < b.blocks.length && q.length < 4000; i++) {
+    const tx = plain(ttsText(b, i)).replace(/\s+/g, ' ').trim(); if (!tx || !/[А-Яа-я]/.test(tx)) continue;
+    const sents = tx.match(/[^.!?…]+(?:[.!?…]+["»“”’)]*|$)\s*/g) || [tx];
+    let w0 = 0;
+    sents.forEach(s => { s = s.trim(); if (!s) return; const n = (tidy(s).match(new RegExp(WORD_RE.source, 'g')) || []).filter(z => /[А-Яа-яЁё]/.test(z)).length; if (/[А-Яа-я]/.test(s)) q.push({ i, s, w0, n }); w0 += n; });
+  }
+  return q;
+}
+function ttsBar() {
+  let el = $('#ttsbar');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'ttsbar'; el.className = 'ttsbar';
+    el.innerHTML = '<button class="chip" id="ttPrev" aria-label="Назад">⏮</button><button class="btn" id="ttPlay">⏸</button><button class="chip" id="ttNext" aria-label="Вперёд">⏭</button><button class="chip" id="ttStop" aria-label="Стоп">■</button>' +
+      '<span class="ttsp"><button class="chip" id="ttSl">−</button><b id="ttRate"></b><button class="chip" id="ttFa">+</button></span>';
+    document.body.appendChild(el);
+    $('#ttPlay').onclick = () => TTS.paused ? ttsResume() : ttsPause();
+    $('#ttStop').onclick = ttsStop;
+    $('#ttPrev').onclick = () => { TTS.k = Math.max(0, TTS.k - 1); ttsSpeak(); };
+    $('#ttNext').onclick = () => { TTS.k = Math.min(TTS.q.length - 1, TTS.k + 1); ttsSpeak(); };
+    $('#ttSl').onclick = () => { S.readRate = Math.max(0.5, Math.round(((S.readRate || 0.9) - 0.1) * 10) / 10); saveS(); ttsRate(); ttsSpeak(); };
+    $('#ttFa').onclick = () => { S.readRate = Math.min(1.6, Math.round(((S.readRate || 0.9) + 0.1) * 10) / 10); saveS(); ttsRate(); ttsSpeak(); };
+  }
+  return el;
+}
+function ttsRate() { const r = $('#ttRate'); if (r) r.textContent = '×' + (S.readRate || 0.9).toFixed(1); }
+async function ttsStart(fromI) {
+  if (!('speechSynthesis' in window)) { toast('Озвучка недоступна на этом устройстве'); return; }
+  loadVoices(); if (!voices.length) toast('Болгарский голос не найден — загрузите его: Настройки iPhone → Универсальный доступ → Устный контент → Голоса → Болгарский');
+  TTS.q = ttsBuild(fromI); TTS.k = 0; if (!TTS.q.length) { toast('Нечего читать'); return; }
+  TTS.on = true; TTS.paused = false; TTS.book = RB.meta.id;
+  ttsBar().classList.add('show'); ttsRate();
+  try { if (navigator.wakeLock) TTS.lock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  ttsSpeak();
+}
+function ttsHi(it) {
+  view.querySelectorAll('.reader .speaking').forEach(x => x.classList.remove('speaking'));
+  view.querySelectorAll('.reader .w.sp').forEach(x => x.classList.remove('sp'));
+  const el = view.querySelector('.reader [data-i="' + it.i + '"]'); if (!el) return;
+  el.classList.add('speaking');
+  const ws = [...el.querySelectorAll('.w')].filter(w => !w.closest('.gl'));
+  for (let k = it.w0; k < it.w0 + it.n && k < ws.length; k++) ws[k].classList.add('sp');
+  const first = ws[it.w0] || el; const r = first.getBoundingClientRect(); const top = (view.querySelector('.rbar') || {}).getBoundingClientRect ? view.querySelector('.rbar').getBoundingClientRect().bottom : 60;
+  if (r.top < top + 10 || r.bottom > window.innerHeight - 170) window.scrollTo({ top: Math.max(0, r.top + window.scrollY - top - 20), behavior: 'smooth' });
+}
+function ttsSpeak() {
+  clearTimeout(TTS.timer);
+  if (!TTS.on) return;
+  TTS.paused = false;
+  try { speechSynthesis.cancel(); } catch (e) {}
+  if (TTS.k >= TTS.q.length) { ttsStop(); toast('Чтение закончено'); return; }
+  const it = TTS.q[TTS.k];
+  if (!RB || RB.meta.id !== TTS.book || !location.hash.startsWith('#/book/')) { ttsStop(); return; }
+  const pg = pageOf(it.i); if (pg !== RB.p) { saveBookPos(); RB.p = pg; RB.anchor = it.i; drawBookPage(true); }
+  ttsHi(it);
+  const u = new SpeechSynthesisUtterance(it.s.replace(/ѝ/g, 'и')); u.lang = 'bg-BG'; u.rate = S.readRate || 0.9;
+  const v = voices.find(x => x.name === S.voice) || voices[0]; if (v) u.voice = v;
+  const my = TTS.k;
+  const next = () => { if (!TTS.on || TTS.paused || TTS.k !== my) return; TTS.k++; ttsSpeak(); };
+  u.onend = next; u.onerror = e => { if (e.error !== 'interrupted' && e.error !== 'canceled') next(); };
+  // запасной таймер на случай, если iOS не прислал onend
+  TTS.timer = setTimeout(() => { if (!speechSynthesis.speaking && !TTS.paused) next(); }, Math.max(4000, it.s.length * 140 / (S.readRate || 0.9)));
+  const chk = () => { if (TTS.k !== my || !TTS.on) return; if (!speechSynthesis.speaking && !speechSynthesis.pending && !TTS.paused) next(); else TTS.timer = setTimeout(chk, 1500); };
+  clearTimeout(TTS.timer); TTS.timer = setTimeout(chk, Math.max(2500, it.s.length * 60 / (S.readRate || 0.9)));
+  speechSynthesis.speak(u);
+  const pl = $('#ttPlay'); if (pl) pl.textContent = '⏸';
+}
+function ttsPause() { TTS.paused = true; clearTimeout(TTS.timer); try { speechSynthesis.cancel(); } catch (e) {} const pl = $('#ttPlay'); if (pl) pl.textContent = '▶'; }
+function ttsResume() { TTS.paused = false; ttsSpeak(); }
+function ttsStop() {
+  TTS.on = false; TTS.paused = false; clearTimeout(TTS.timer); try { speechSynthesis.cancel(); } catch (e) {}
+  const bar = $('#ttsbar'); if (bar) bar.classList.remove('show');
+  view.querySelectorAll('.reader .speaking').forEach(x => x.classList.remove('speaking'));
+  view.querySelectorAll('.reader .w.sp').forEach(x => x.classList.remove('sp'));
+  try { if (TTS.lock) TTS.lock.release(); } catch (e) {} TTS.lock = null;
 }
 
 /* ---------- старт ---------- */
