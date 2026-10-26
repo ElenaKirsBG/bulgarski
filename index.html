@@ -9460,7 +9460,8 @@ const HELP = [
 <ul><li>Панель внизу: <b>⏮ / ⏭</b> — предыдущее / следующее предложение, <b>⏸ / ▶</b> — пауза и продолжение, <b>■</b> — остановить, <b>− / +</b> — скорость (от 0,5 до 1,6; по умолчанию 0,9). Скорость также меняется в «Аа».</li>
 <li>Во время чтения можно нажимать на слова — откроется перевод; чтение при этом продолжается.</li>
 <li>В книгах по методу Франка читается только болгарский текст (русские подсказки пропускаются).</li>
-<li>Экран не гаснет, пока идёт чтение. При блокировке экрана или сворачивании приложения iPhone останавливает озвучку — вернитесь и нажмите ▶.</li></ul>
+<li><b>Чтение при выключенном экране:</b> можно нажать боковую кнопку — чтение продолжится, а на экране блокировки появится плеер (название книги, текущее предложение, кнопки пауза/вперёд/назад). Приложение передаёт голосу iPhone сразу около 40 предложений вперёд и затем подкладывает новые. Если iOS всё же остановит чтение при долгой блокировке — откройте приложение: чтение продолжится с того же места, а подсветка и страница догонят текущее предложение.</li>
+<li>Пока экран включён, он не гаснет сам во время чтения.</li></ul>
 <p><b>Произношение и ударения</b> определяет сам болгарский голос iPhone (например, Daria): он читает по собственным правилам болгарской речи, ударения в большинстве слов ставит верно, но изредка ошибается — особенно в редких словах и словах, которые пишутся одинаково, а произносятся по-разному. Управлять ударениями голоса из приложения iOS не позволяет; если сомневаетесь — нажмите на слово и посмотрите ударение в словаре. Чем качественнее голос, тем лучше: в настройках iPhone загрузите версию голоса «улучшенное качество», если она доступна.</p>`],
 ['Закладки, пометки и поиск в книге', `
 <p><b>Закладка:</b> прокрутите нужное место к верху экрана → <b>🔖</b> → при желании заметка и цвет → «Сохранить». У абзаца появятся полоса слева и значок 🔖 (нажмите на значок, чтобы изменить или удалить).</p>
@@ -9599,32 +9600,90 @@ function ttsHi(it) {
   const first = ws[it.w0] || el; const r = first.getBoundingClientRect(); const top = (view.querySelector('.rbar') || {}).getBoundingClientRect ? view.querySelector('.rbar').getBoundingClientRect().bottom : 60;
   if (r.top < top + 10 || r.bottom > window.innerHeight - 170) window.scrollTo({ top: Math.max(0, r.top + window.scrollY - top - 20), behavior: 'smooth' });
 }
+function ttsUtter(it) { const u = new SpeechSynthesisUtterance(it.s.replace(/ѝ/g, 'и')); u.lang = 'bg-BG'; u.rate = S.readRate || 0.9; const v = voices.find(x => x.name === S.voice) || voices[0]; if (v) u.voice = v; return u; }
+function ttsUI(it) {
+  if (!it || document.visibilityState === 'hidden') return;
+  if (!RB || RB.meta.id !== TTS.book || !location.hash.startsWith('#/book/')) return;
+  const pg = pageOf(it.i); if (pg !== RB.p) { saveBookPos(); RB.p = pg; RB.anchor = it.i; drawBookPage(true); }
+  ttsHi(it); saveBookPos();
+}
+/* озвучка ставится в очередь системного синтезатора пачкой — так она продолжается и при выключенном экране */
+function ttsEnqueue(gen, n) {
+  const end = Math.min(TTS.q.length, TTS.next + n);
+  for (let j = TTS.next; j < end; j++) {
+    const it = TTS.q[j], u = ttsUtter(it);
+    u.onstart = () => { if (gen !== TTS.gen) return; TTS.k = j; TTS.idle = 0; ttsUI(it); ttsMedia(); if (j >= TTS.next - 12 && TTS.next < TTS.q.length) ttsEnqueue(gen, 40); };
+    if (j === TTS.q.length - 1) u.onend = () => { if (gen === TTS.gen) { ttsStop(); toast('Чтение закончено'); } };
+    speechSynthesis.speak(u);
+  }
+  TTS.next = end;
+}
 function ttsSpeak() {
   clearTimeout(TTS.timer);
   if (!TTS.on) return;
-  TTS.paused = false;
+  if (!RB || RB.meta.id !== TTS.book) { ttsStop(); return; }
+  TTS.paused = false; TTS.gen = (TTS.gen || 0) + 1; const gen = TTS.gen;
   try { speechSynthesis.cancel(); } catch (e) {}
   if (TTS.k >= TTS.q.length) { ttsStop(); toast('Чтение закончено'); return; }
-  const it = TTS.q[TTS.k];
-  if (!RB || RB.meta.id !== TTS.book || !location.hash.startsWith('#/book/')) { ttsStop(); return; }
-  const pg = pageOf(it.i); if (pg !== RB.p) { saveBookPos(); RB.p = pg; RB.anchor = it.i; drawBookPage(true); }
-  ttsHi(it);
-  const u = new SpeechSynthesisUtterance(it.s.replace(/ѝ/g, 'и')); u.lang = 'bg-BG'; u.rate = S.readRate || 0.9;
-  const v = voices.find(x => x.name === S.voice) || voices[0]; if (v) u.voice = v;
-  const my = TTS.k;
-  const next = () => { if (!TTS.on || TTS.paused || TTS.k !== my) return; TTS.k++; ttsSpeak(); };
-  u.onend = next; u.onerror = e => { if (e.error !== 'interrupted' && e.error !== 'canceled') next(); };
-  // запасной таймер на случай, если iOS не прислал onend
-  TTS.timer = setTimeout(() => { if (!speechSynthesis.speaking && !TTS.paused) next(); }, Math.max(4000, it.s.length * 140 / (S.readRate || 0.9)));
-  const chk = () => { if (TTS.k !== my || !TTS.on) return; if (!speechSynthesis.speaking && !speechSynthesis.pending && !TTS.paused) next(); else TTS.timer = setTimeout(chk, 1500); };
-  clearTimeout(TTS.timer); TTS.timer = setTimeout(chk, Math.max(2500, it.s.length * 60 / (S.readRate || 0.9)));
-  speechSynthesis.speak(u);
+  TTS.next = TTS.k; ttsUI(TTS.q[TTS.k]);
+  setTimeout(() => { if (gen === TTS.gen) ttsEnqueue(gen, 40); }, 60);
+  ttsAudio(true); ttsMedia();
+  const pl = $('#ttPlay'); if (pl) pl.textContent = '⏸';
+  const wd = () => { // сторож: если синтезатор замолчал без события — продолжаем со следующего предложения
+    if (gen !== TTS.gen || !TTS.on) return;
+    if (!TTS.paused && document.visibilityState === 'visible' && !speechSynthesis.speaking && !speechSynthesis.pending) { TTS.idle = (TTS.idle || 0) + 1; if (TTS.idle >= 2) { TTS.idle = 0; TTS.k = Math.min(TTS.k + 1, TTS.q.length); ttsSpeak(); return; } } else TTS.idle = 0;
+    TTS.timer = setTimeout(wd, 2000);
+  };
+  TTS.timer = setTimeout(wd, 3000);
+}
+function ttsPause() {
+  TTS.paused = true;
+  try { speechSynthesis.pause(); } catch (e) {}
+  setTimeout(() => { if (TTS.paused && speechSynthesis.speaking && !speechSynthesis.paused) { try { speechSynthesis.cancel(); } catch (e) {} TTS.hardPaused = true; } }, 250);
+  ttsAudio(false); ttsMedia();
+  const pl = $('#ttPlay'); if (pl) pl.textContent = '▶';
+}
+function ttsResume() {
+  TTS.paused = false;
+  if (TTS.hardPaused || !speechSynthesis.paused) { TTS.hardPaused = false; ttsSpeak(); return; }
+  try { speechSynthesis.resume(); } catch (e) {}
+  setTimeout(() => { if (!TTS.paused && !speechSynthesis.speaking) ttsSpeak(); }, 400);
+  ttsAudio(true); ttsMedia();
   const pl = $('#ttPlay'); if (pl) pl.textContent = '⏸';
 }
-function ttsPause() { TTS.paused = true; clearTimeout(TTS.timer); try { speechSynthesis.cancel(); } catch (e) {} const pl = $('#ttPlay'); if (pl) pl.textContent = '▶'; }
-function ttsResume() { TTS.paused = false; ttsSpeak(); }
+/* тихий звук держит аудиосессию активной; Media Session показывает плеер на экране блокировки */
+function silentWav() {
+  const sr = 8000, n = sr * 2, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+}
+function ttsAudio(on) {
+  try {
+    if (!TTS.audio) { TTS.audio = new Audio(silentWav()); TTS.audio.loop = true; TTS.audio.setAttribute('playsinline', ''); }
+    if (on) TTS.audio.play().catch(() => {}); else TTS.audio.pause();
+  } catch (e) {}
+}
+function ttsMedia() {
+  if (!('mediaSession' in navigator)) return;
+  try {
+    const it = TTS.q[TTS.k] || {};
+    navigator.mediaSession.metadata = new MediaMetadata({ title: it.s ? it.s.slice(0, 80) : 'Чтение вслух', artist: RB ? plain(RB.meta.title) : 'Български език', album: 'Български език · стр. ' + (RB ? RB.p + 1 : '') });
+    navigator.mediaSession.playbackState = TTS.paused ? 'paused' : 'playing';
+    if (!TTS.msInit) {
+      TTS.msInit = true;
+      const h = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch (e) {} };
+      h('play', () => ttsResume()); h('pause', () => ttsPause()); h('stop', () => ttsStop());
+      h('previoustrack', () => { TTS.k = Math.max(0, TTS.k - 1); ttsSpeak(); }); h('nexttrack', () => { TTS.k = Math.min(TTS.q.length - 1, TTS.k + 1); ttsSpeak(); });
+      h('seekbackward', () => { TTS.k = Math.max(0, TTS.k - 1); ttsSpeak(); }); h('seekforward', () => { TTS.k = Math.min(TTS.q.length - 1, TTS.k + 1); ttsSpeak(); });
+    }
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && TTS.on && TTS.q[TTS.k]) ttsUI(TTS.q[TTS.k]); });
 function ttsStop() {
-  TTS.on = false; TTS.paused = false; clearTimeout(TTS.timer); try { speechSynthesis.cancel(); } catch (e) {}
+  TTS.on = false; TTS.paused = false; TTS.gen = (TTS.gen || 0) + 1; clearTimeout(TTS.timer); try { speechSynthesis.cancel(); } catch (e) {}
+  ttsAudio(false); try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'; } catch (e) {}
   const bar = $('#ttsbar'); if (bar) bar.classList.remove('show');
   view.querySelectorAll('.reader .speaking').forEach(x => x.classList.remove('speaking'));
   view.querySelectorAll('.reader .w.sp').forEach(x => x.classList.remove('sp'));
