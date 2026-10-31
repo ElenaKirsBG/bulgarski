@@ -1,6 +1,6 @@
 /* Офлайн-режим: приложение целиком хранится на устройстве.
    При обновлении файлов на GitHub увеличьте номер версии ниже. */
-const CACHE = 'bg-course-v16';
+const CACHE = 'bg-course-v17';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
